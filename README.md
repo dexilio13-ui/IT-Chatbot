@@ -28,7 +28,7 @@ Modularni RAG (Retrieval-Augmented Generation) chatbot sistem za IT hardversku t
 | **FastAPI** | Web framework za REST API – brz, asinhron, sa automatskom OpenAPI/Swagger dokumentacijom |
 | **Uvicorn** | ASGI server za pokretanje FastAPI aplikacije |
 | **LlamaIndex Core** | RAG framework – povezuje LLM sa vektorskom bazom za kontekstualne odgovore |
-| **Groq** | LLM provajder – pokreće `llama-3.3-70b-versatile` model, izuzetno brz inference |
+| **Groq** | LLM provajder – pokreće `llama-3.3-70b-versatile` model, izuzetno brz rad |
 | **ChromaDB** | Vektorska baza podataka – čuva embeddovane chunkove dokumenata |
 | **SentenceTransformers (BAAI/bge-small-en-v1.5)** | Lokalni embedding model – pretvara tekst u vektore |
 | **PyJWT** | JSON Web Token autentifikacija |
@@ -168,8 +168,6 @@ uv sync
 # Stavi .md, .txt, .pdf fajlove u: backend/uploads/
 
 # 5. Pokrenuti server
-uv run uvicorn main:app --reload
-             ili
 uv run fastapi dev backend/main.py
 ```
 
@@ -212,13 +210,13 @@ Backend je dostupan na: **http://localhost:8000**
 ### Koraci
 
 ```bash
-# 1. Navigirati do frontend foldera
+# 1. Ući frontend folder
 cd frontend
 
 # 2. Instalirati zavisnosti
 npm install
 
-# 3. (Opcijalno) Podesiti API URL u .env fajlu
+# 3. (Opciono) Podesiti API URL u .env fajlu
 echo "VITE_API_URL=http://localhost:8000" > .env
 
 # 4. Pokrenuti dev server
@@ -253,8 +251,7 @@ Staticki fajlovi se generisu u `frontend/dist/` folderu.
 
 ```bash
 # Terminal 1 - Backend
-cd backend
-uv run uvicorn main:app --reload
+uv run fastapi dev backend/main.py
 
 # Terminal 2 - Frontend
 cd frontend
