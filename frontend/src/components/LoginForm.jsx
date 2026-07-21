@@ -31,7 +31,7 @@ export default function LoginForm() {
           <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-gradient-to-br from-accent-500 to-accent-700 flex items-center justify-center text-3xl shadow-2xl shadow-accent-500/20">
             💻
           </div>
-          <h1 className="text-2xl font-bold text-white">RAG Chatbot</h1>
+          <h1 className="text-2xl font-bold text-white">IT Asistent</h1>
           <p className="text-gray-500 text-sm mt-1">Prijavite se za nastavak</p>
         </div>
 
@@ -88,6 +88,7 @@ export default function LoginForm() {
           {/* Test credentials hint */}
           <div className="bg-gray-800/50 border border-gray-700/50 rounded-xl px-4 py-3 text-xs text-gray-500 space-y-0.5">
             <p className="font-medium text-gray-400 mb-1">Test nalozi:</p>
+            <p>admin / admin123</p>
             <p>serviser / 123</p>
             <p>prodavac / 123</p>
             <p>kupac / 123</p>
@@ -120,7 +121,7 @@ export default function LoginForm() {
 
         {/* Footer */}
         <p className="text-center text-xs text-gray-600 mt-8">
-          RAG Chatbot &copy; 2026
+          IT Asistent &copy; 2026
         </p>
       </div>
     </div>

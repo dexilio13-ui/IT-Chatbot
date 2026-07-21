@@ -1,21 +1,22 @@
-# 💻 RAG Chatbot
+# 💻 IT Asistent — RAG Chatbot
 
-Modularni RAG (Retrieval-Augmented Generation) chatbot sistem za IT hardversku tehničku podršku i prodaju. Korisnici se prijavljuju, postavljaju pitanja, a sistem odgovara isključivo na osnovu dokumentacione baze znanja.
+Modularni RAG (Retrieval-Augmented Generation) chatbot sistem za IT hardversku tehničku podršku i prodaju. Korisnici se prijavljuju, postavljaju pitanja, a sistem odgovara isključivo na osnovu dokumentacione baze znanja, uz poštovanje pristupnih prava po ulozi (RBAC) i prikaz izvora odgovora.
 
 ---
 
 ##   Sadržaj
 
-1. [Tehnologije] 
-2. [Arhitektura sistema] 
-3. [Chunkovanje, Parsiranje, LLM i Embedding] 
-4. [Backend – Uputstvo za pokretanje] 
-5. [Frontend – Uputstvo za pokretanje] 
-6. [Kako testirati sistem] 
-7. [Autentifikacija i role_id] 
-8. [Bezbednosne funkcije (status implementacije)] 
-9. [Citiranje izvora (citations) – status] 
-10. [Buduća unapređenja] 
+1. [Tehnologije]
+2. [Arhitektura sistema]
+3. [Chunkovanje, Parsiranje, LLM i Embedding]
+4. [Backend – Uputstvo za pokretanje]
+5. [Frontend – Uputstvo za pokretanje]
+6. [Kako testirati sistem]
+7. [Autentifikacija, RBAC i role_id]
+8. [Bezbednosne funkcije (status implementacije)]
+9. [Citiranje izvora (citations) – status]
+10. [Buduća unapređenja]
+11. [Struktura projekta]
 
 ---
 
@@ -27,13 +28,15 @@ Modularni RAG (Retrieval-Augmented Generation) chatbot sistem za IT hardversku t
 |---|---|
 | **FastAPI** | Web framework za REST API – brz, asinhron, sa automatskom OpenAPI/Swagger dokumentacijom |
 | **Uvicorn** | ASGI server za pokretanje FastAPI aplikacije |
-| **LlamaIndex Core** | RAG framework – povezuje LLM sa vektorskom bazom za kontekstualne odgovore |
-| **Groq** | LLM provajder – pokreće `llama-3.3-70b-versatile` model, izuzetno brz rad |
-| **ChromaDB** | Vektorska baza podataka – čuva embeddovane chunkove dokumenata |
-| **SentenceTransformers (BAAI/bge-small-en-v1.5)** | Lokalni embedding model – pretvara tekst u vektore |
-| **PyJWT** | JSON Web Token autentifikacija |
-| **python-dotenv** | Učitavanje `.env` konfiguracije |
-| **python-multipart** | Podrška za OAuth2 form data login |
+| **LlamaIndex Core** | RAG framework – hibridni retriever (vektor + BM25), chat engine sa memorijom |
+| **OpenAI** | LLM (`gpt-4o-mini`) i embedding model (`text-embedding-3-small`, dim=1536) |
+| **LlamaParse** | Parsiranje strukturiranih dokumenata (PDF, DOCX, PPTX) – čuva tabele i strukturu |
+| **Qdrant Cloud** | Vektorska baza podataka – čuva embeddovane chunkove dokumenata |
+| **PostgreSQL 18 + SQLModel** | Relaciona baza – korisnici, uloge i istorija razgovora |
+| **bcrypt** | Bezbedno hashiranje lozinki |
+| **PyJWT** | JSON Web Token autentifikacija (HS256, istek 60 min) |
+| **pydantic-settings** | Centralizovano učitavanje `.env` konfiguracije |
+| **python-multipart** | Podrška za OAuth2 form data login i upload fajlova |
 
 ### Frontend (JavaScript)
 
@@ -47,7 +50,7 @@ Modularni RAG (Retrieval-Augmented Generation) chatbot sistem za IT hardversku t
 #### Zašto baš ove frontend tehnologije?
 
 - **Vite** – Donosi brže vreme pokretanja i reload u odnosu na starije alate. Koristi ES module direktno u browser-u tokom development-a.
-- **React** – Standard izbora za moderne SPA aplikacije. Veliki ekosistem, lako održavanje kroz komponente, i odlična podrška za asinhrone tokove u ovom slučaju (chatbot).
+- **React** – Standard izbora za moderne SPA aplikacije. Veliki ekosistem, lako održavanje kroz komponente, i odlična podrška za asinhrone tokove (SSE streaming chat odgovora).
 - **Tailwind CSS** – Ubrzava UI development kroz predefinisane utility klase. PurgeCSS automatski uklanja neiskorišćene stilove pri build-u.
 
 ---
@@ -57,42 +60,45 @@ Modularni RAG (Retrieval-Augmented Generation) chatbot sistem za IT hardversku t
 ```
 Korisnik (Browser)
     │
-    ├── Login → POST /api/auth/login ────────────► JWT token
+    ├── Login → POST /api/auth/login ────────────► JWT token (username, role_id, is_admin)
     │                                                  │
     │                                                  ▼
-    └── Chat  → POST /api/chat (sa Bearer token) ──► FastAPI
-                                                            │
-                                                     ┌──────┴──────┐
-                                                     │  Auth Check  │
-                                                     │ get_current_ │
-                                                     │    user()    │
-                                                     └──────┬──────┘
-                                                            │
-                                                     ┌──────▼──────┐
-                                                     │ LlamaIndex  │
-                                                     │ Chat Engine │
-                                                     └──────┬──────┘
-                                                            │
-                                              ┌─────────────┼─────────────┐
-                                              ▼             ▼             ▼
-                                        ┌─────────┐  ┌─────────┐  ┌─────────┐
-                                        │ Groq    │  │ChromaDB │  │Uploads  │
-                                        │  LLM    │  │Vector   │  │Folder   │
-                                        └─────────┘  │  Store  │  │(.md)    │
-                                                     └─────────┘  └─────────┘
+    └── Chat  → POST /api/chat/stream (SSE) ──────► FastAPI
+                (Bearer token)                              │
+                                                       ┌──────┴──────┐
+                                                       │  Auth Check  │
+                                                       │ get_current_ │
+                                                       │    user()    │
+                                                       └──────┬──────┘
+                                                              │
+                                                       ┌──────▼──────┐
+                                                       │ LlamaIndex  │
+                                                       │ Hybrid RAG  │
+                                                       │   Engine    │
+                                                       └──────┬──────┘
+                                                              │
+                                    ┌─────────────┬───────────┼───────────┬─────────────┐
+                                    ▼             ▼           ▼           ▼             ▼
+                              ┌─────────┐  ┌───────────┐┌─────────┐┌───────────┐ ┌───────────┐
+                              │ OpenAI  │  │  Qdrant   ││  BM25   ││PostgreSQL │ │  Admin    │
+                              │gpt-4o-  │  │  Cloud    ││Keyword  ││(users +   │ │  Panel    │
+                              │  mini   │  │ (vektor,  ││Retriever││ istorija) │ │ (upload,  │
+                              │         │  │dim=1536)  ││         ││           │ │ RBAC role)│
+                              └─────────┘  └───────────┘└─────────┘└───────────┘ └───────────┘
 ```
 
 ### Tok podataka:
 
-1. Korisnik se prijavljuje → backend kreira JWT token sa `username` i `role_id`
+1. Korisnik se prijavljuje → backend proverava bcrypt hash lozinke u PostgreSQL, kreira JWT token sa `username`, `role_id` i `is_admin`
 2. Frontend čuva token u `localStorage` i šalje ga u `Authorization: Bearer` header-u
 3. Pri svakoj poruci, FastAPI proverava token preko `get_current_user()` dependency-ja
-4. Poruka ide u LlamaIndex chat engine koji:
-   - Pretvara pitanje u vektor (embedding)
-   - Pretražuje ChromaDB za najsličnije chunkove
-   - Prosleđuje kontekst + pitanje Groq LLM-u
+4. Poruka ide u LlamaIndex hybrid chat engine koji:
+   - Pretvara pitanje u vektor (OpenAI `text-embedding-3-small`)
+   - Paralelno pretražuje Qdrant (semantički) i BM25 (ključne reči), sa RBAC filterom `required_role_id <= role_id`
+   - Kombinuje rezultate kroz Reciprocal Rank Fusion (RRF) i deduplikuje
+   - Prosleđuje kontekst + istoriju razgovora + pitanje OpenAI `gpt-4o-mini` modelu
    - LLM generiše odgovor **isključivo** na osnovu priloženog konteksta
-5. Odgovor se vraća frontendu kao JSON
+5. Odgovor se strimuje frontendu token-po-token (SSE), a na kraju se šalje i najbolji izvor (naziv, sadržaj, skor relevantnosti)
 
 ---
 
@@ -100,47 +106,57 @@ Korisnik (Browser)
 
 ### Parsiranje dokumenata
 
-- **Alat:** `SimpleDirectoryReader` iz LlamaIndex-a
-- **Podržani formati:** `.txt`, `.md`, `.pdf`, `.csv`, `.docx` i drugi (automatski detektuje)
-- **Lokacija:** `backend/uploads/`
-- **Proces:** Pri prvom pokretanju, svi fajlovi iz `uploads/` foldera se učitavaju, chunkuju i embedduju u ChromaDB
+Dokumenti se dodaju **isključivo kroz admin panel** (`POST /api/admin/documents/upload`), ne više automatskim učitavanjem foldera pri startu.
+
+- **Strukturirani formati (`.pdf`, `.docx`, `.doc`, `.pptx`):** `LlamaParse` (`result_type="markdown"`) + `MarkdownNodeParser` – čuva tabele i strukturu dokumenta netaknutom
+- **Ravni tekst (`.txt`, `.md`, `.csv`):** `SimpleDirectoryReader` + `SentenceSplitter`
+- **Ograničenje veličine fajla:** 50 MB
+- **Privremeno čuvanje:** fajl se snima na disk sa UUID prefiksom, indeksira, pa se briše – trajni zapis je isključivo u Qdrant-u
 
 ### Chunkovanje
 
-- **Parser:** `SentenceSplitter`
+- **Parser (za .txt/.md/.csv):** `SentenceSplitter`
 - **Veličina chunka (chunk_size):** 1024 karaktera
 - **Preklapanje (chunk_overlap):** 200 karaktera
-- **Zašto:** Manji chunkovi su precizniji za IT hardverska pitanja nego LlamaIndex-ove podrazumevane vrednosti (1024/200). Preklapanje osigurava da kontekst nije izgubljen na granicama chunkova.
+- **Za PDF/DOCX/PPTX:** `MarkdownNodeParser` deli po markdown strukturi (naslovi, tabele) umesto po fiksnoj dužini
 
 ### LLM (Large Language Model)
 
-- **Provajder:** Groq
-- **Model:** `llama-3.3-70b-versatile`
-- **Temperatura:** 0.5 (balans između kreativnosti i preciznosti)
-- **Max tokena:** 1024
-- **API ključ:** Postavlja se u `.env` fajl kao `GROQ_API_KEY`
-- **Konfiguracija:** `backend/rag/engine.py` → `Settings.llm = Groq(...)`
+- **Provajder:** OpenAI
+- **Model:** `gpt-4o-mini`
+- **Temperatura:** 0.1 (visoka preciznost, minimalna kreativnost)
+- **Max tokena:** 300 (`Settings.num_output` dodatno duplira ovo ograničenje)
+- **API ključ:** `.env` → `OPENAI_API_KEY`
+- **Konfiguracija:** `backend/rag/engine.py` → `Settings.llm = OpenAI(...)`
 
 ### Embedding model
 
-- **Model:** `local:BAAI/bge-small-en-v1.5`
-- **Tip:** Lokalni (ne zahteva API ključ)
-- **Veličina:** Mali i brz model (~30MB), odličan za semantičko pretraživanje
-- **Konfiguracija:** `backend/rag/engine.py` → `Settings.embed_model = "local:BAAI/bge-small-en-v1.5"`
+- **Model:** `text-embedding-3-small` (OpenAI)
+- **Dimenzija:** 1536
+- **API ključ:** `.env` → `OPENAI_API_KEY`
+- **Konfiguracija:** `backend/rag/engine.py` → `Settings.embed_model = OpenAIEmbedding(...)`
+- **Auto-migracija:** Ako Qdrant kolekcija postoji sa pogrešnom dimenzijom (npr. stara 384 od prethodnog lokalnog modela), backend je automatski briše i ponovo kreira pri startu (`main.py` lifespan)
+
+### Hibridna pretraga (Hybrid Retrieval)
+
+- **Vektorska pretraga:** Qdrant, semantička sličnost, RBAC filter (`required_role_id <= role_id`)
+- **BM25 pretraga:** ključne reči, RBAC se primenjuje naknadnim filtriranjem (BM25 ne podržava MetadataFilters direktno)
+- **Spajanje rezultata:** Reciprocal Rank Fusion (RRF, k=60) – koristi se isključivo za rangiranje
+- **Prikaz relevantnosti:** originalni cosine similarity skor iz vektorskog retrievera (0–100%), dodatno ograničen (`_clamp_score`) da nikad ne pređe 100%
+- **Deduplikacija:** po normalizovanom tekstu chunka
 
 ### Memorija
 
-- **Tip:** `ChatMemoryBuffer`
-- **Limit:** 3000 tokena
+- **Tip:** `ChatMemoryBuffer` (in-memory po username-u) ili istorija iz PostgreSQL, ako je dostupna sesija
 - **Mod rada:** `condense_plus_context` – sažima istoriju razgovora i dodaje je kontekstu
-- **Sistemski prompt:** `backend/rag/system_prompt.py` – definiše pravila ponašanja bota
+- **Perzistencija:** poslednjih 50 poruka po korisniku čuva se u PostgreSQL (`ChatHistory` tabela)
+- **Sistemski prompt:** `backend/rag/system_prompt.py` – definiše pravila ponašanja bota (odgovara isključivo iz konteksta, ne izmišlja podatke)
 
-### Vektorska baza (ChromaDB)
+### Vektorska baza (Qdrant Cloud)
 
-- **Lokacija:** `backend/chroma_db/`
-- **Kolekcija:** `it_hardver_baza`
-- **Perzistencija:** Automatska – podaci ostaju sačuvani između restartovanja
-- **Duplikacija:** **Sprečena** – pre ponovnog indeksiranja proverava se broj postojećih vektora
+- **Kolekcija:** konfigurisano preko `QDRANT_COLLECTION` (npr. `it_support_kb`)
+- **Payload indeksi:** `source` (keyword) i `required_role_id` (integer) – kreiraju se automatski pri startu
+- **Upravljanje:** kroz admin panel (upload, brisanje po source-u ili po ID-ju)
 
 ---
 
@@ -150,6 +166,10 @@ Korisnik (Browser)
 
 - Python 3.12+
 - UV package manager (`pip install uv` ili `pipx install uv`)
+- PostgreSQL 18 (lokalno, port 5433 preporučeno) ili drugi PostgreSQL server
+- OpenAI API ključ
+- LlamaCloud API ključ (za LlamaParse)
+- Qdrant Cloud instanca (ili lokalni Qdrant kontejner)
 
 ### Koraci
 
@@ -159,16 +179,26 @@ git clone <repo-url>
 cd chatbot_app/backend
 
 # 2. Kreirati .env fajl
-echo "GROQ_API_KEY=tvoj-groq-api-kljuc" > .env
+cat <<EOF > .env
+DATABASE_URL=postgresql://postgres:admin123@localhost:5433/postgres
+JWT_SECRET_KEY=tvoja-super-tajna-sifra-za-jwt-32bita
+OPENAI_API_KEY=tvoj-openai-api-kljuc
+LLAMA_CLOUD_API_KEY=tvoj-llamacloud-api-kljuc
+QDRANT_URL=https://tvoj-qdrant-cluster.cloud.qdrant.io
+QDRANT_API_KEY=tvoj-qdrant-api-kljuc
+QDRANT_COLLECTION=it_support_kb
+EOF
 
 # 3. Instalirati zavisnosti
 uv sync
 
-# 4. Dodati dokumente u uploads folder
-# Stavi .md, .txt, .pdf fajlove u: backend/uploads/
+# 4. Pokrenuti server (kolekcija u Qdrant-u se kreira/migrira automatski)
+uv run fastapi dev main.py --port 8000
+             ili
+uv run uvicorn main:app --reload
 
-# 5. Pokrenuti server
-uv run fastapi dev backend/main.py
+# 5. Dodati dokumente kroz admin panel (Swagger UI ili frontend)
+# POST /api/admin/documents/upload (potreban admin token)
 ```
 
 Backend je dostupan na: **http://localhost:8000**
@@ -178,25 +208,34 @@ Backend je dostupan na: **http://localhost:8000**
 | Metod | Ruta | Opis |
 |---|---|---|
 | `POST` | `/api/auth/login` | Prijava (username + password) → vraća JWT token |
-| `POST` | `/api/chat` | Slanje poruke (zahteva Bearer token) |
+| `POST` | `/api/chat` | Slanje poruke, sinhroni odgovor (zahteva Bearer token) |
+| `POST` | `/api/chat/stream` | Slanje poruke, SSE streaming odgovor (zahteva Bearer token) |
+| `GET`  | `/api/admin/users` | Lista svih korisnika (samo admin) |
+| `GET`  | `/api/admin/documents` | Lista indeksiranih dokumenata iz Qdrant-a (samo admin) |
+| `POST` | `/api/admin/documents/upload` | Upload i indeksiranje novog dokumenta (samo admin) |
+| `DELETE` | `/api/admin/documents/source/{source_name}` | Brisanje svih chunkova za dati dokument (samo admin) |
+| `DELETE` | `/api/admin/documents/{point_id}` | Brisanje jednog chunka (samo admin) |
 | `GET`  | `/` | Health check |
 | `GET`  | `/docs` | Swagger UI dokumentacija |
 
 ### Test nalozi
 
-| Username | Password | role_id | Uloga |
-|---|---|---|---|
-| `serviser` | `123` | 3 | Technician |
-| `prodavac` | `123` | 2 | Sales |
-| `kupac`    | `123` | 1 | Customer |
+| Username | Password | role_id | Uloga | is_admin |
+|---|---|---|---|---|
+| `admin`     | `admin123` | 3 | Admin | ✅ |
+| `serviser` | `123` | 3 | Technician | ❌ |
+| `prodavac` | `123` | 2 | Sales | ❌ |
+| `kupac`    | `123` | 1 | Customer | ❌ |
 
 ### Konfiguracija (fajlovi)
 
-- `backend/core/security.py` – JWT podešavanja (SECRET_KEY, ALGORITHM, token expiration)
-- `backend/rag/engine.py` – RAG engine (LLM, embedding, chunking, ChromaDB)
+- `backend/core/config.py` – Sve `.env` promenljive (JWT, PostgreSQL, Qdrant, OpenAI, LlamaCloud)
+- `backend/core/security.py` – JWT podešavanja (kreiranje tokena)
+- `backend/rag/engine.py` – RAG engine (LLM, embedding, hibridni retriever, RRF)
 - `backend/rag/system_prompt.py` – Sistemski prompt sa pravilima ponašanja
-- `backend/api/auth.py` – Auth ruta sa dummy bazom korisnika
-- `backend/api/chat.py` – Chat ruta sa JWT verifikacijom
+- `backend/api/auth.py` – Login ruta sa bcrypt proverom naspram PostgreSQL baze
+- `backend/api/chat.py` – Chat rute (sync + SSE) sa JWT verifikacijom
+- `backend/api/admin.py` – Admin rute (upload, brisanje, listanje dokumenata)
 
 ---
 
@@ -231,15 +270,15 @@ Frontend je dostupan na: **http://localhost:5173**
 npm run build
 ```
 
-Staticki fajlovi se generisu u `frontend/dist/` folderu.
+Statički fajlovi se generišu u `frontend/dist/` folderu.
 
 ### Struktura frontend koda
 
 | Fajl | Opis |
 |---|---|
 | `src/App.jsx` | Glavna komponenta – uslovno prikazuje LoginForm ili ChatBox |
-| `src/components/LoginForm.jsx` | Forma za prijavu (username + password) |
-| `src/components/ChatBox.jsx` | Chat interfejs – poruke, input, slanje |
+| `src/components/LoginForm.jsx` | Forma za prijavu (username + password), prikazuje test naloge |
+| `src/components/ChatBox.jsx` | Chat interfejs – poruke, SSE streaming, prikaz izvora i skora relevantnosti |
 | `src/context/AuthContext.jsx` | Auth provider – upravlja JWT tokenom, login/logout logika |
 | `src/services/api.js` | Axios instanca – automatski dodat token, centralizovana obrada grešaka |
 
@@ -251,7 +290,8 @@ Staticki fajlovi se generisu u `frontend/dist/` folderu.
 
 ```bash
 # Terminal 1 - Backend
-uv run fastapi dev backend/main.py
+cd backend
+uv run fastapi dev main.py
 
 # Terminal 2 - Frontend
 cd frontend
@@ -267,53 +307,61 @@ npm run dev
 5. Kliknuti na "Authorize" dugme (gore desno) i uneti: `Bearer <token>`
 6. Testirati `/api/chat` sa porukom npr. "Šta piše u servisnom priručniku?"
 
-### 3. Testiranje preko frontenda
+### 3. Testiranje RBAC filtriranja
+
+1. Ulogovati se kao `kupac` (role_id=1) → postaviti pitanje o cenama → bot ne sme da vidi Interni cenovnik
+2. Ulogovati se kao `prodavac` (role_id=2) → isto pitanje → bot treba da vidi i cenovnik
+3. Ulogovati se kao `admin` → treba da vidi sve dokumente bez obzira na `required_role_id`
+
+### 4. Testiranje preko frontenda
 
 1. Otvoriti: **http://localhost:5173**
 2. Prijaviti se sa `serviser` / `123`
-3. Postaviti pitanje u chat polju
+3. Postaviti pitanje u chat polju i pratiti streaming odgovor uživo
+4. Kliknuti na prikazani izvor da vidiš ceo tekst chunka i skor relevantnosti
 
-### 4. Unit testovi (ako su implementirani)
+### 5. Testiranje admin panela
+
+1. Ulogovati se kao `admin` / `admin123`
+2. Upload-ovati novi dokument (PDF, DOCX, TXT, MD ili CSV) sa izabranim `required_role_id`
+3. Proveriti listu dokumenata (`GET /api/admin/documents`)
+4. Obrisati dokument po source-u ili pojedinačnom chunku
+
+### 6. Unit testovi
 
 ```bash
 cd backend
-uv run pytest
+uv run pytest tests/ -v
 ```
 
-### 5. Type checking
+### 7. Type checking
 
 ```bash
 cd backend
 uv run mypy .
 ```
 
-### 6. Lint
+### 8. Lint
 
 ```bash
 cd backend
 uv run ruff check .
+uv run ruff format --check .
 ```
 
 ---
 
-## 🔐 Autentifikacija i role_id
+## 🔐 Autentifikacija, RBAC i role_id
 
 ### ✅ Implementirano
 
-- **JWT autentifikacija** kompletno radi
-- **role_id se čuva u tokenu:** `backend/api/auth.py` linija 31
+- **JWT autentifikacija** kompletno radi, lozinke se čuvaju kao **bcrypt hash** (ne plain-text)
+- **role_id i is_admin se čuvaju u tokenu:** `backend/api/auth.py`
 - **role_id se izvlači iz tokena:** `backend/api/chat.py` u `get_current_user()` dependency-ju
-- **Token expiration:** 60 minuta od kreiranja
-- **Tri test naloga** sa različitim `role_id` vrednostima (1 = Kupac, 2 = Prodavac, 3 = Serviser)
-
-### ❌ Nije implementirano (planirano)
-
-- **Filtriranje dokumenata po role_id** – Trenutno svi ulogovani korisnici imaju pristup **svim dokumentima** u `uploads/` folderu
-- U `chat.py` postoji komentar:
-  ```python
-  # Kasnije cemo current_user['role_id'] prosledjivati LlamaIndexu za filtriranje!
-  ```
-- **Plan:** Potrebno je označiti dokumente sa dozvoljenim `role_id` (metadata) i proslediti filter u ChromaDB query
+- **Token expiration:** 60 minuta od kreiranja (podesivo u `.env`)
+- **Četiri test naloga** sa različitim `role_id` i `is_admin` vrednostima (1=Kupac, 2=Prodavac, 3=Serviser, + admin)
+- **Filtriranje dokumenata po role_id JE implementirano** – `required_role_id <= role_id` filter se primenjuje i na vektorskoj (MetadataFilters) i na BM25 pretrazi (naknadno filtriranje)
+- **Admin nalozi (`is_admin=true`) preskaču RBAC filter u potpunosti** i vide sve dokumente
 
 ---
 
@@ -339,7 +387,7 @@ uv run ruff check .
 
 **Šta je potrebno za implementaciju:**
 - Integrisati Google reCAPTCHA ili Cloudflare Turnstile
-- Pratiti broj neuspešnih login pokušaja po IP adresi (npr. u memoriji ili Redis-u)
+- Pratiti broj neuspešnih login pokušaja po IP adresi (u memoriji ili Redis-u — `REDIS_BROKER_URL`/`REDIS_BACKEND_URL` su već pripremljeni u `config.py`)
 - Nakon 3 neuspešna pokušaja, zahtevati CAPTCHA verifikaciju
 - Frontend već ima pripremljenu logiku za prikaz CAPTCHA poruke (`captcha_required` flag)
 
@@ -347,12 +395,11 @@ uv run ruff check .
 
 | Status | Detalji |
 |---|---|
-| ❌ **Nije implementirano** | Nema evidencije neuspešnih login pokušaja |
+| ❌ **Nije implementirano** | Nema evidencije neuspešnih login pokušaja (postoji samo opšte logovanje kroz `core/logger.py`) |
 
 **Šta je potrebno za implementaciju:**
-- Dodati `loguru` ili koristiti Python `logging` modul
-- Logovati: IP adresu, username, vreme, razlog neuspeha
-- Opciono: čuvati u fajlu (`failed_logins.log`) ili bazi podataka
+- Logovati: IP adresu, username, vreme, razlog neuspeha kroz postojeći `logger` iz `core/logger.py`
+- Opciono: čuvati u fajlu (`failed_logins.log`) ili posebnoj PostgreSQL tabeli
 
 ---
 
@@ -360,32 +407,46 @@ uv run ruff check .
 
 | Status | Detalji |
 |---|---|
-| ❌ **Nije implementirano** | Chat odgovori ne sadrže reference na izvorne dokumente |
+| ✅ **Implementirano** | Svaki chat odgovor (sync i SSE) sadrži referencu na izvorni dokument |
 
-**Šta je planirano:**
-- Prikazati iz kog dokumenta i iz kog chunka je preuzet odgovor
-- Dodati metapodatke uz svaki odgovor (naziv fajla, strana, pozicija u dokumentu)
-- Omogućiti korisniku da klikne na izvor i vidi originalni kontekst
+**Kako radi:**
+- Backend prosleđuje `source_nodes` iz LlamaIndex odgovora
+- Prikazuje se **1 najbolji izvor** po odgovoru: naziv (`source`), potreban nivo pristupa (`required_role_id`), skor relevantnosti (`score`, ograničen na 0–100%) i sadržaj (prvih 2000 karaktera)
+- Frontend (`ChatBox.jsx`) prikazuje izvor kao klikabilnu karticu – klikom se vidi ceo tekst chunka
 
-**Kako će biti implementirano (ubuduće):**
-- U `engine.py`, prilikom query-ja, sačuvati `source_nodes` iz LlamaIndex odgovora
-- Proslediti metapodatke uz `response` u chat endpointu
-- Prikazati ih na frontendu kao linkove ili hover kartice
+**Istorija popravki skora relevantnosti:**
+- Skor relevantnosti je prošao kroz tri iteracije popravki (RRF normalizacija → clamping kao safety net → konačno korišćenje cosine similarity skora za smislen prikaz po upitu). Detalji u internoj dokumentaciji `objasnjenje_backend.txt`.
+
+**Moguća buduća proširenja:**
+- Prikaz više od 1 izvora po odgovoru
+- Highlight tačnog dela teksta iz kog je odgovor izveden
 
 ---
 
 ## 🚀 Šta su moguća unapređenja
 
-**Role-based filtriranje dokumenata** – ograničiti pristup dokumentima po `role_id`
-**Rate limiting** – zaštita od brute-force napada
-**CAPTCHA** – posle više neuspešnih pokušaja
-**Logging** – evidencija svih neuspešnih prijava
-**Citations** – prikazivanje izvora uz svaki odgovor
-**SSE striming** – postepeno prikazivanje odgovora (kao ChatGPT)
-**PostgreSQL + SQLModel** – zameniti dummy bazu pravom bazom
-**.env konfiguracija** – prebaciti SECRET_KEY i ostale parametre u `.env`
-**Docker** – kontejnerizacija celog sistema
-**Admin panel** – upravljanje dokumentima i korisnicima
+- **Rate limiting** – zaštita od brute-force napada
+- **CAPTCHA** – posle više neuspešnih pokušaja
+- **Logging neuspešnih prijava** – evidencija svih neuspešnih login pokušaja
+- **Prikaz više izvora** – trenutno se prikazuje samo 1 najbolji izvor po odgovoru
+- **Docker** – kontejnerizacija celog sistema (backend + frontend + PostgreSQL)
+- **Async obrada upload-a** – iskoristiti već pripremljenu Redis/Celery konfiguraciju za asinhrono indeksiranje velikih fajlova
+- **Testovi** – proširiti pytest pokrivenost (auth, chat, admin, RBAC scenariji)
+- **Multi-jezička podrška** – trenutno sistem odgovara isključivo na srpskom
+
+---
+
+## ✅ Već implementirano (od prve verzije)
+
+- **Role-based filtriranje dokumenata** (RBAC) po `role_id`
+- **Citations** – prikazivanje izvora uz svaki odgovor, sa skorom relevantnosti
+- **SSE streaming** – postepeno prikazivanje odgovora (kao ChatGPT)
+- **PostgreSQL + SQLModel** – zamenjena dummy baza pravom relacionom bazom
+- **bcrypt hashing lozinki** – zamenjen plain-text
+- **`.env` konfiguracija** – svi tajni ključevi i parametri su u `.env`, ne u kodu
+- **Admin panel** – upravljanje dokumentima (upload, listanje, brisanje) i korisnicima
+- **Hibridna pretraga** (vektor + BM25 + RRF) umesto samo vektorske
+- **LlamaParse** – strukturirano parsiranje PDF/DOCX/PPTX dokumenata (čuva tabele)
 
 ---
 
@@ -395,25 +456,34 @@ uv run ruff check .
 chatbot_app/
 ├── backend/
 │   ├── api/
-│   │   ├── auth.py          # Auth ruta (login, JWT)
-│   │   ├── chat.py          # Chat ruta (RAG)
+│   │   ├── auth.py           # Auth ruta (login, JWT + bcrypt)
+│   │   ├── chat.py           # Chat rute (sync + SSE, clamp skora)
+│   │   ├── admin.py          # Admin rute (upload, brisanje, listanje)
 │   │   └── __init__.py
-│   ├── chroma_db/           # Vektorska baza (perzistentna)
 │   ├── core/
-│   │   ├── security.py      # JWT konfiguracija
+│   │   ├── config.py         # Pydantic Settings (.env varijable)
+│   │   ├── db.py             # PostgreSQL konekcija (SQLModel)
+│   │   ├── security.py       # JWT kreiranje
+│   │   ├── logger.py         # Centralizovano logovanje
 │   │   └── __init__.py
 │   ├── rag/
-│   │   ├── engine.py        # RAG engine (LlamaIndex)
-│   │   ├── system_prompt.py # Sistemski prompt
+│   │   ├── engine.py         # RAG engine (hibridni retriever, RBAC, RRF)
+│   │   ├── chat_history.py   # Učitavanje/čuvanje istorije iz PostgreSQL
+│   │   ├── system_prompt.py  # Sistemski prompt
 │   │   └── __init__.py
-│   ├── uploads/             # Dokumenti za indeksiranje
-│   ├── main.py              # FastAPI app
-│   └── pyproject.toml       # Python zavisnosti
+│   ├── models/
+│   │   ├── user.py           # SQLModel: User tabela
+│   │   ├── chat_history.py   # SQLModel: ChatHistory tabela
+│   │   └── __init__.py
+│   ├── uploads/               # Privremeni fajlovi za indeksiranje (brišu se posle)
+│   ├── tests/                 # pytest testovi
+│   ├── main.py                # FastAPI app, lifespan, Qdrant auto-migracija
+│   └── pyproject.toml         # Python zavisnosti
 │
 ├── frontend/
 │   ├── src/
 │   │   ├── components/
-│   │   │   ├── ChatBox.jsx      # Chat interfejs
+│   │   │   ├── ChatBox.jsx      # Chat interfejs (streaming, izvori, skor)
 │   │   │   └── LoginForm.jsx    # Login forma
 │   │   ├── context/
 │   │   │   └── AuthContext.jsx  # Auth state
@@ -430,5 +500,3 @@ chatbot_app/
 │
 └── README.md
 ```
-
-

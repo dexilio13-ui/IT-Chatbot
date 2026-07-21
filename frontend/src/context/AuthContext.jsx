@@ -4,8 +4,24 @@ import { loginUser } from '../services/api'
 const AuthContext = createContext(null)
 
 /**
+ * Dekodira JWT token i vraća payload (bez validacije potpisa).
+ * @param {string} token - JWT token
+ * @returns {object|null} Dekodirani payload ili null ako je nevalidan
+ */
+function decodeJwt(token) {
+  try {
+    const payload = token.split('.')[1]
+    // JWT koristi base64url (sa - umesto + i _ umesto /)
+    const base64 = payload.replace(/-/g, '+').replace(/_/g, '/')
+    return JSON.parse(atob(base64))
+  } catch {
+    return null
+  }
+}
+
+/**
  * AuthProvider obmotava celu aplikaciju i upravlja stanjem
- * autentifikacije (JWT token, korisničko ime).
+ * autentifikacije (JWT token, korisničko ime, admin status).
  */
 export function AuthProvider({ children }) {
   // Inicijalizujemo stanje iz localStorage (ako je korisnik već ulogovan)
@@ -37,13 +53,22 @@ export function AuthProvider({ children }) {
     try {
       const data = await loginUser(username, password)
 
-      // Uspešan login - čuvamo token i korisnika
+      // Uspešan login - čuvamo token
       const accessToken = data.access_token
+
+      // Dekodiranje JWT da izvučemo is_admin i role_id
+      const payload = decodeJwt(accessToken)
+      const isAdmin = payload?.is_admin || false
+      const roleId = payload?.role_id || 1
+
       localStorage.setItem('access_token', accessToken)
-      localStorage.setItem('user', JSON.stringify({ username }))
+      localStorage.setItem(
+        'user',
+        JSON.stringify({ username, is_admin: isAdmin, role_id: roleId })
+      )
 
       setToken(accessToken)
-      setUser({ username })
+      setUser({ username, is_admin: isAdmin, role_id: roleId })
     } catch (err) {
       // Obrada grešaka
       if (err.response) {

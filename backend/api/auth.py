@@ -1,36 +1,44 @@
+import bcrypt
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordRequestForm
+from sqlmodel import Session, select
+
 from core.security import create_access_token
+from core.db import get_session
+from models.user import User
 
 router = APIRouter()
 
-# Dummy baza korisnika (Dok ne uvedemo PostgreSQL i SQLModel)
-# Oponašamo 3 različite role iz tvog opisa
-FAKE_DB = {
-    "serviser": {"password": "123", "role_id": 3, "role_name": "Technician"},
-    "prodavac": {"password": "123", "role_id": 2, "role_name": "Sales"},
-    "kupac": {"password": "123", "role_id": 1, "role_name": "Customer"},
-}
-
 
 @router.post("/login")
-async def login(form_data: OAuth2PasswordRequestForm = Depends()):
-    """Autentifikuje korisnika i vraća JWT token sa njegovom rolom."""
+async def login(
+    form_data: OAuth2PasswordRequestForm = Depends(),
+    session: Session = Depends(get_session),
+) -> dict[str, str]:
+    """Autentifikuje korisnika i vraća JWT token sa njegovom rolom iz baze."""
 
-    # 1. Provera da li korisnik postoji u našoj dummy bazi
-    user = FAKE_DB.get(form_data.username)
+    # 1. Traženje korisnika u PostgreSQL bazi
+    statement = select(User).where(User.username == form_data.username)
+    user = session.exec(statement).first()
 
-    # 2. Provera lozinke (bez heširanja za sada)
-    if not user or form_data.password != user["password"]:
+    # 2. Provera lozinke (bcrypt hash)
+    if not user or not bcrypt.checkpw(
+        form_data.password.encode("utf-8"),
+        user.hashed_password.encode("utf-8"),
+    ):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Pogrešan username ili lozinka",
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-    # 3. Kreiranje JWT tokena (ubacujemo role_id da bismo kasnije filtrirali RAG)
+    # 3. Kreiranje JWT tokena
     access_token = create_access_token(
-        data={"sub": form_data.username, "role_id": user["role_id"]}
+        data={
+            "sub": user.username,
+            "role_id": user.role_id,
+            "is_admin": user.is_admin,
+        }
     )
 
     # 4. Standardni OAuth2 format odgovora

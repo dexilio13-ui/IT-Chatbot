@@ -1,7 +1,12 @@
 # === Environment ===
-.env
+backend/.env
+frontend/.env
 .env.local
 .env.production
+
+# === Windows artifacti ===
+nul
+*.nul
 
 # === Python ===
 __pycache__/
@@ -21,6 +26,9 @@ frontend/dist/
 .idea/
 *.swp
 *.swo
+
+# === Jednokratni skriptovi ===
+backend/ingest_to_qdrant.py
 
 # === OS ===
 .DS_Store

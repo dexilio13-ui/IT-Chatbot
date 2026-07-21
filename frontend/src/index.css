@@ -20,11 +20,31 @@
   background: #6366f1;
 }
 
-/* Smooth fade-in animation for messages */
-@keyframes fadeIn {
+/* ========== Message animations ========== */
+
+/* Enhanced fade-in with scale for a polished entrance */
+@keyframes fadeInUp {
   from {
     opacity: 0;
-    transform: translateY(8px);
+    transform: translateY(12px) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.message-enter {
+  animation: fadeInUp 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* Staggered delay for consecutive messages (applied via inline style) */
+
+/* Source citation reveal - fades in slightly after the message */
+@keyframes sourceReveal {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
   }
   to {
     opacity: 1;
@@ -32,6 +52,46 @@
   }
 }
 
-.message-enter {
-  animation: fadeIn 0.3s ease-out;
+/* Staggered delays for individual source items */
+.source-item {
+  opacity: 0;
+  animation: sourceReveal 0.3s ease-out forwards;
+}
+
+/* Subtle pulse for the bot icon while streaming */
+@keyframes iconPulse {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(79, 70, 229, 0.3);
+  }
+  50% {
+    box-shadow: 0 0 0 8px rgba(79, 70, 229, 0);
+  }
+}
+
+.icon-streaming {
+  animation: iconPulse 1.5s ease-in-out infinite;
+}
+
+/* Smooth bounce for the loading dots */
+@keyframes loadingBounce {
+  0%, 80%, 100% {
+    transform: scale(0.6);
+    opacity: 0.4;
+  }
+  40% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+.loading-dot {
+  animation: loadingBounce 1.2s ease-in-out infinite;
+}
+
+.loading-dot:nth-child(2) {
+  animation-delay: 0.2s;
+}
+
+.loading-dot:nth-child(3) {
+  animation-delay: 0.4s;
 }

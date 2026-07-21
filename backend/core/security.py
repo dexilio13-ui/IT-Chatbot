@@ -2,10 +2,12 @@ import jwt
 from datetime import datetime, timedelta, timezone
 from fastapi.security import OAuth2PasswordBearer
 
-# Za početak koristimo hardkodovanu tajnu (kasnije ide u .env fajl)
-SECRET_KEY = "0fe03762f40c338b348de62963516b296817dcde0a3b3e615fb37442c4daf45c"
-ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 60
+from core.config import settings
+
+# Secret ključ za JWT - učitava se iz settings-a
+SECRET_KEY = settings.JWT_SECRET_KEY
+ALGORITHM = settings.JWT_ALGORITHM
+ACCESS_TOKEN_EXPIRE_MINUTES = settings.JWT_ACCESS_TOKEN_EXPIRE_MINUTES
 
 # FastAPI klasa koja kaže Swagger-u gde se nalazi login ruta
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login")
