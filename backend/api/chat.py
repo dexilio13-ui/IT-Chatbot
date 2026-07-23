@@ -15,6 +15,9 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
+# Fraza koju LLM vraća kada nema podatak u bazi znanja
+_NO_DATA_PHRASE = "Nemam taj podatak u bazi znanja"
+
 
 def _clamp_score(score: float | None) -> float | None:
     """
@@ -100,18 +103,22 @@ async def chat_endpoint(
         response = chat_engine.chat(request.message)
 
         # Ekstrakcija source_nodes u citate — prikazujemo samo 1 najbolji izvor
+        response_text = str(response)
         sources: list[SourceInfo] = []
-        for ns in (response.source_nodes or [])[:1]:
-            sources.append(
-                SourceInfo(
-                    source=ns.node.metadata.get("source", "Nepoznat"),
-                    required_role_id=ns.node.metadata.get("required_role_id", "?"),
-                    score=_clamp_score(ns.score),
-                    content=ns.node.get_content()[:2000],  # Celi tekst + limit
-                )
-            )
 
-        return ChatResponse(response=str(response), sources=sources)
+        # Ako LLM kaže da nema podatak, ne saljemo izvore
+        if _NO_DATA_PHRASE not in response_text:
+            for ns in (response.source_nodes or [])[:1]:
+                sources.append(
+                    SourceInfo(
+                        source=ns.node.metadata.get("source", "Nepoznat"),
+                        required_role_id=ns.node.metadata.get("required_role_id", "?"),
+                        score=_clamp_score(ns.score),
+                        content=ns.node.get_content()[:2000],  # Celi tekst + limit
+                    )
+                )
+
+        return ChatResponse(response=response_text, sources=sources)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -146,20 +153,27 @@ async def chat_stream_endpoint(
 
     def event_generator():
         try:
-            # 1. Tokeni u realnom vremenu
+            # 1. Tokeni u realnom vremenu — skupljamo ih da znamo pun odgovor
+            full_response: list[str] = []
             for token in streaming_response.response_gen:
+                full_response.append(token)
                 yield f"data: {json.dumps({'type': 'token', 'content': token})}\n\n"
 
-            # 2. Sources (citations) - prikazujemo samo 1 najbolji izvor
-            sources: list[dict[str, Any]] = [
-                {
-                    "source": ns.node.metadata.get("source", "Nepoznat"),
-                    "required_role_id": ns.node.metadata.get("required_role_id", "?"),
-                    "score": _clamp_score(ns.score),
-                    "content": ns.node.get_content()[:2000],  # Celi tekst + limit
-                }
-                for ns in (streaming_response.source_nodes or [])[:1]
-            ]
+            # 2. Sources (citations) — prikazujemo samo 1 najbolji izvor,
+            #    ALI samo ako LLM nije rekao da nema podatak u bazi znanja
+            response_text = "".join(full_response)
+            if _NO_DATA_PHRASE in response_text:
+                sources: list[dict[str, Any]] = []
+            else:
+                sources = [
+                    {
+                        "source": ns.node.metadata.get("source", "Nepoznat"),
+                        "required_role_id": ns.node.metadata.get("required_role_id", "?"),
+                        "score": _clamp_score(ns.score),
+                        "content": ns.node.get_content()[:2000],  # Celi tekst + limit
+                    }
+                    for ns in (streaming_response.source_nodes or [])[:1]
+                ]
             yield f"data: {json.dumps({'type': 'sources', 'content': sources})}\n\n"
 
             # 3. Done signal
