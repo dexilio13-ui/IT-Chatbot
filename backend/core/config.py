@@ -40,13 +40,6 @@ class Settings(BaseSettings):
     # ── LlamaCloud (LlamaParse) ───────────────────────────
     LLAMA_CLOUD_API_KEY: str = ""
 
-    # ── Groq LLM (opciono, legacy) ────────────────────────
-    GROQ_API_KEY: str = ""
-
-    # ── Redis (Celery broker/backend) ──────────────────────
-    REDIS_BROKER_URL: str = "redis://localhost:6379/0"
-    REDIS_BACKEND_URL: str = "redis://localhost:6379/1"
-
     # ── Aplikacija ─────────────────────────────────────────
     CORS_ORIGINS: list[str] = ["*"]
     UPLOAD_DIR: str = str(BACKEND_DIR / "uploads")

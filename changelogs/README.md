@@ -249,13 +249,13 @@ Backend je dostupan na: **http://localhost:8000**
 ### Koraci
 
 ```bash
-# 1. Ući frontend folder
+# 1. Navigirati do frontend foldera
 cd frontend
 
 # 2. Instalirati zavisnosti
 npm install
 
-# 3. (Opciono) Podesiti API URL u .env fajlu
+# 3. (Opcijalno) Podesiti API URL u .env fajlu
 echo "VITE_API_URL=http://localhost:8000" > .env
 
 # 4. Pokrenuti dev server
@@ -475,6 +475,7 @@ chatbot_app/
 │   │   ├── chat_history.py   # SQLModel: ChatHistory tabela
 │   │   └── __init__.py
 │   ├── uploads/               # Privremeni fajlovi za indeksiranje (brišu se posle)
+│   ├── tests/                 # pytest testovi
 │   ├── main.py                # FastAPI app, lifespan, Qdrant auto-migracija
 │   └── pyproject.toml         # Python zavisnosti
 │

@@ -27,9 +27,6 @@ frontend/dist/
 *.swp
 *.swo
 
-# === Jednokratni skriptovi ===
-backend/ingest_to_qdrant.py
-
 # === OS ===
 .DS_Store
 Thumbs.db

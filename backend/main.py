@@ -35,7 +35,7 @@ async def lifespan(app: FastAPI):
     logger = logging.getLogger("main")
     logger.info("=" * 50)
     logger.info("Aplikacija se pokrece...")
-    logger.info("Modularni RAG Chatbot - FastAPI + LlamaIndex + Qdrant Cloud")
+    logger.info("Chatbot - FastAPI + LlamaIndex + Qdrant Cloud")
 
     # ── PostgreSQL baza ──────────────────────────────────────
     logger.info("Inicijalizacija PostgreSQL baze podataka...")

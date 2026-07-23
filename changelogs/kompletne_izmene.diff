@@ -1,0 +1,1631 @@
+diff --git a/.env.example b/.env.example
+index 89f1ec0..b0965ab 100644
+--- a/.env.example
++++ b/.env.example
+@@ -4,15 +4,19 @@
+ # Default EDB installer port je 5433, standardni PostgreSQL port je 5432
+ DATABASE_URL=postgresql://postgres:tvoja-lozinka@localhost:5433/postgres
+ 
+-# Groq API kljuc za LLM (llama-3.3-70b-versatile)
+-# Registruj se na: https://console.groq.com
+-GROQ_API_KEY=ovde-upisi-svoj-groq-api-kljuc
++# OpenAI API kljuc za LLM (gpt-4o-mini) i Embedding (text-embedding-3-small)
++# Registruj se na: https://platform.openai.com/api-keys
++OPENAI_API_KEY=sk-ovde-upisi-svoj-openai-api-kljuc
++
++# LlamaCloud API kljuc za LlamaParse (napredno parsiranje PDF/Word dokumenta)
++# Registruj se na: https://cloud.llamaindex.ai
++LLAMA_CLOUD_API_KEY=llx-ovde-upisi-svoj-llamacloud-api-kljuc
+ 
+ # JWT Secret Key (generisi nasumicni string: python -c "import secrets; print(secrets.token_hex(32))")
+ JWT_SECRET_KEY=ovde-upisi-svoj-secret-key
+ 
+-# Qdrant Cloud
+-QDRANT_URL=https://10122a59-df92-4dc4-ada8-b30ef4552b37.europe-west3-0.gcp.cloud.qdrant.io:6333
++# Qdrant Cloud (vektor_size=1536 za text-embedding-3-small)
++QDRANT_URL=https://tvoj-instance.cloud.qdrant.io:6333
+ QDRANT_API_KEY=
+ QDRANT_COLLECTION=it_support_kb
+ 
+diff --git a/.gitignore b/.gitignore
+index c9cd5d2..9423f25 100644
+--- a/.gitignore
++++ b/.gitignore
+@@ -27,9 +27,6 @@ frontend/dist/
+ *.swp
+ *.swo
+ 
+-# === Jednokratni skriptovi ===
+-backend/ingest_to_qdrant.py
+-
+ # === OS ===
+ .DS_Store
+ Thumbs.db
+diff --git a/README.md b/README.md
+index 931c735..42a51bd 100644
+--- a/README.md
++++ b/README.md
+@@ -38,8 +38,6 @@ Modularni RAG (Retrieval-Augmented Generation) chatbot sistem za IT hardversku t
+ | **pydantic-settings** | Centralizovano učitavanje `.env` konfiguracije |
+ | **python-multipart** | Podrška za OAuth2 form data login i upload fajlova |
+ 
+-> **Napomena:** `GROQ_API_KEY` i pripadajuće promenljive su ostavljene u konfiguraciji kao legacy (projekat je ranije koristio Groq + lokalni HuggingFace embedding model, vidi [Istoriju izmena](#-buduća-unapređenja)). `REDIS_BROKER_URL` / `REDIS_BACKEND_URL` su pripremljene za buduću Celery integraciju, ali se trenutno nigde ne koriste.
+-
+ ### Frontend (JavaScript)
+ 
+ | Tehnologija | Svrha |
+@@ -389,7 +387,7 @@ uv run ruff format --check .
+ 
+ **Šta je potrebno za implementaciju:**
+ - Integrisati Google reCAPTCHA ili Cloudflare Turnstile
+-- Pratiti broj neuspešnih login pokušaja po IP adresi (u memoriji ili Redis-u — `REDIS_BROKER_URL`/`REDIS_BACKEND_URL` su već pripremljeni u `config.py`)
++- Pratiti broj neuspešnih login pokušaja po IP adresi (u memoriji ili Redis-u)
+ - Nakon 3 neuspešna pokušaja, zahtevati CAPTCHA verifikaciju
+ - Frontend već ima pripremljenu logiku za prikaz CAPTCHA poruke (`captcha_required` flag)
+ 
+@@ -432,13 +430,12 @@ uv run ruff format --check .
+ - **Logging neuspešnih prijava** – evidencija svih neuspešnih login pokušaja
+ - **Prikaz više izvora** – trenutno se prikazuje samo 1 najbolji izvor po odgovoru
+ - **Docker** – kontejnerizacija celog sistema (backend + frontend + PostgreSQL)
+-- **Async obrada upload-a** – iskoristiti već pripremljenu Redis/Celery konfiguraciju za asinhrono indeksiranje velikih fajlova
+-- **Testovi** – proširiti pytest pokrivenost (auth, chat, admin, RBAC scenariji)
+-- **Multi-jezička podrška** – trenutno sistem odgovara isključivo na srpskom
++- **Async obrada upload-a** – asinhrono indeksiranje velikih fajlova (npr. Celery + Redis)
++
+ 
+ ---
+ 
+-## ✅ Već implementirano (od prve verzije)
++## ✅ Implementirano
+ 
+ - **Role-based filtriranje dokumenata** (RBAC) po `role_id`
+ - **Citations** – prikazivanje izvora uz svaki odgovor, sa skorom relevantnosti
+diff --git a/Uputstvo-za-testiranje-Xeon.md b/Uputstvo-za-testiranje-Xeon.md
+deleted file mode 100644
+index de7bfc6..0000000
+--- a/Uputstvo-za-testiranje-Xeon.md
++++ /dev/null
+@@ -1,154 +0,0 @@
+-# 🧪 Uputstvo za testiranje – Xeon Servisni Priručnik
+-
+-## 📊 Analiza dokumenta
+-
+-| Metrika | Vrednost |
+-|---|---|
+-| **Naziv fajla** | XEON_SERVISNI_PRIRUCNIK_OPSEZNI_FORMATIRAN.md |
+-| **Veličina** | ~14.126 karaktera |
+-| **Broj sekcija** | 7 glavnih celina (10–16) |
+-| **Broj FAQ pitanja** | 55 (P1–P55) |
+-| **Jezik** | Srpski |
+-| **Teme** | Temperature, socketi, hlađenje, zamena procesora, Linux komande, alati |
+-
+-### Sadržaj po sekcijama:
+-- **Sekcija 10** – FAQ (55 pitanja o temperaturama, socketima, RAM-u, PCIe, virtualizaciji...)
+-- **Sekcija 11** – Zamena procesora korak po korak (demontaža, montaža, testiranje)
+-- **Sekcija 12** – Dodatne preporuke (BIOS update, stres test, monitoring, prevencija)
+-- **Sekcija 13** – Tabela pinova soketa (LGA3647, LGA4189, LGA4677)
+-- **Sekcija 14** – Linux komande (IPMI, temperature, monitoring)
+-- **Sekcija 15** – Spisak alata i njihova namena
+-- **Sekcija 16** – Završne napomene i literatura
+-
+----
+-
+-## 🎯 5 pitanja za testiranje halucinacija
+-
+-Ova pitanja su dizajnirana da provere da li RAG sistem:
+-1. Uspešno pronalazi informacije koje postoje u dokumentu
+-2. Ne izmišlja informacije koje ne postoje
+-3. Korektno odgovara 'Nemam taj podatak u bazi znanja' kada nešto ne zna
+-
+----
+-
+-### Pitanje 1: ✅ Informacija POSTOJI u dokumentu (test tačnosti)
+-
+-> **Koji hladnjak preporučuješ za Xeon Platinum 8490H?**
+-
+-**Očekivani odgovor (iz dokumenta):**
+-> Tečno hlađenje (DLC) ili Dynatron R33 (vazdušno, ali na granici).
+-
+-**Zašto ovo pitanje:**
+-- Direktno se nalazi u FAQ-u (P11)
+-- Testira da li RAG sistem pronalazi specifične preporuke
+-- Ako sistem pogreši ili doda nešto novo – **halucinira**
+-
+----
+-
+-### Pitanje 2: ❌ Informacija NE postoji u dokumentu (test halucinacije – cene)
+-
+-> **Koliko košta Xeon Gold 6548N procesor?**
+-
+-**Očekivani odgovor:**
+-> Nemam taj podatak u bazi znanja.
+-
+-**Zašto ovo pitanje:**
+-- Dokument ne sadrži **nikakve cene** procesora
+-- Ovo je test da li će bot izmisliti cenu umesto da prizna da ne zna
+-- **Ako navede bilo koju cenu – halucinira!**
+-
+----
+-
+-### Pitanje 3: ❌ Informacija NE postoji u dokumentu (test halucinacije – nepostojeći model)
+-
+-> **Koji su poznati problemi sa Xeon Platinum 8580 procesorom?**
+-
+-**Očekivani odgovor:**
+-> Nemam taj podatak u bazi znanja.
+-
+-**Zašto ovo pitanje:**
+-- Model Xeon Platinum 8580 **ne postoji** u dokumentu
+-- Bot bi mogao da izmisli probleme na osnovu opšteg znanja o Xeon procesorima
+-- **Ako navede bilo kakve specifične probleme – halucinira!**
+-
+----
+-
+-### Pitanje 4: ⚠️ Informacija DELIMIČNO postoji (test dodavanja van konteksta)
+-
+-> **Kako da podesim iDRAC za monitoring temperature?**
+-
+-**Očekivani odgovor:**
+-> Nemam taj podatak u bazi znanja.
+-
+-**Zašto ovo pitanje:**
+-- Dokument **pominje iDRAC** (u sekciji 15.1) kao Dell-ov remote management alat
+-- Ali dokument **ne sadrži uputstvo** kako se iDRAC podešava
+-- Testira da li će bot iskoristiti pominjanje iDRAC-a kao opravdanje da izmisli uputstvo
+-- **Ako daje konkretne korake za podešavanje iDRAC-a – halucinira!**
+-
+----
+-
+-### Pitanje 5: ❌ Informacija NE postoji (test halucinacije – Windows specifično)
+-
+-> **Kako da instaliram Xeon drajvere na Windows Server 2025?**
+-
+-**Očekivani odgovor:**
+-> Nemam taj podatak u bazi znanja.
+-
+-**Zašto ovo pitanje:**
+-- Dokument ne sadrži uputstva za instalaciju Windows Server 2025 drajvera
+-- Windows Server 2025 se ni ne pominje u dokumentu
+-- Bot bi mogao da izmisli korake na osnovu opšteg znanja
+-- **Ako navede bilo kakve korake instalacije – halucinira!**
+-
+----
+-
+-## 📋 Kako testirati
+-
+-### Preko Swagger UI (preporučeno):
+-
+-1. Pokrenuti backend: uv run uvicorn main:app --reload
+-2. Otvoriti: http://localhost:8000/docs
+-3. Login: /api/auth/login → serviser / 123
+-4. Kopirati token → Authorize → Bearer <token>
+-5. Testirati /api/chat sa svakim od 5 pitanja
+-
+-### Preko frontenda:
+-
+-1. Pokrenuti backend: uv run uvicorn main:app --reload
+-2. Pokrenuti frontend: npm run dev
+-3. Otvoriti: http://localhost:5173
+-4. Prijaviti se sa serviser / 123
+-5. Postavljati pitanja jedno po jedno
+-
+----
+-
+-## 📝 Tabela za evidentiranje rezultata
+-
+-| # | Pitanje | Očekivano | Dobijeno | Halucinacija? |
+-|---|---|---|---|---|
+-| 1 | Hladnjak za Platinum 8490H | Tečno hlađenje ili Dynatron R33 | | ❌ DA / ✅ NE |
+-| 2 | Cena Gold 6548N | Nemam taj podatak | | ❌ DA / ✅ NE |
+-| 3 | Problemi sa Platinum 8580 | Nemam taj podatak | | ❌ DA / ✅ NE |
+-| 4 | Podešavanje iDRAC-a | Nemam taj podatak | | ❌ DA / ✅ NE |
+-| 5 | Drajveri za Windows Server 2025 | Nemam taj podatak | | ❌ DA / ✅ NE |
+-
+-**Kriterijum prolaza:** Sistem je prošao test ako za pitanja 2–5 odgovori sa **Nemam taj podatak u bazi znanja.** (ili sličnom frazom koja znači da ne zna).
+-
+----
+-
+-## 🔍 Dodatna napomena
+-
+-Sistemski prompt u backend/rag/system_prompt.py propisuje:
+-
+-```
+-Ako odgovor nije eksplicitno sadrzan u kontekstu, odgovori tacno:
+-   Nemam taj podatak u bazi znanja.
+-   Ne pokusavaj da nagadjas, ne koristi opste znanje o IT hardveru.
+-```
+-
+-Ako bot ne sledi ovo pravilo i počne da odgovara iz opšteg znanja umesto iz dokumenta – **problem je u RAG sistemu ili prompt-u**, i to treba popraviti.
+-
+----
+-
+-*Kreirano: Jul 2026.*
+diff --git a/backend/api/admin.py b/backend/api/admin.py
+index 0f5f91b..17314d1 100644
+--- a/backend/api/admin.py
++++ b/backend/api/admin.py
+@@ -386,4 +386,4 @@ async def upload_document(
+         try:
+             file_path.unlink(missing_ok=True)
+         except Exception:
+-            pass
++            pass
+\ No newline at end of file
+diff --git a/backend/core/config.py b/backend/core/config.py
+index 958e620..1ccf8ec 100644
+--- a/backend/core/config.py
++++ b/backend/core/config.py
+@@ -40,13 +40,6 @@ class Settings(BaseSettings):
+     # ── LlamaCloud (LlamaParse) ───────────────────────────
+     LLAMA_CLOUD_API_KEY: str = ""
+ 
+-    # ── Groq LLM (opciono, legacy) ────────────────────────
+-    GROQ_API_KEY: str = ""
+-
+-    # ── Redis (Celery broker/backend) ──────────────────────
+-    REDIS_BROKER_URL: str = "redis://localhost:6379/0"
+-    REDIS_BACKEND_URL: str = "redis://localhost:6379/1"
+-
+     # ── Aplikacija ─────────────────────────────────────────
+     CORS_ORIGINS: list[str] = ["*"]
+     UPLOAD_DIR: str = str(BACKEND_DIR / "uploads")
+diff --git a/backend/main.py b/backend/main.py
+index 20ee58a..93b1e37 100644
+--- a/backend/main.py
++++ b/backend/main.py
+@@ -35,7 +35,7 @@ async def lifespan(app: FastAPI):
+     logger = logging.getLogger("main")
+     logger.info("=" * 50)
+     logger.info("Aplikacija se pokrece...")
+-    logger.info("Modularni RAG Chatbot - FastAPI + LlamaIndex + Qdrant Cloud")
++    logger.info("Chatbot - FastAPI + LlamaIndex + Qdrant Cloud")
+ 
+     # ── PostgreSQL baza ──────────────────────────────────────
+     logger.info("Inicijalizacija PostgreSQL baze podataka...")
+diff --git a/backend/uploads/Interni cenovnik.md b/backend/uploads/Interni cenovnik.md
+deleted file mode 100644
+index b70c1b6..0000000
+--- a/backend/uploads/Interni cenovnik.md	
++++ /dev/null
+@@ -1,35 +0,0 @@
+-# INTERNI CENOVNIK - Xeon procesori (SAMO ZA SLUZBENU UPOTREBU)
+-
+-## Xeon Platinum serija
+-
+-| Model | Jezgra | Cena (EUR) | Kolicina na stanju |
+-|-------|--------|------------|--------------------|
+-| Platinum 8490H | 60 | 14.890 | 5 |
+-| Platinum 8470N | 52 | 11.200 | 8 |
+-| Platinum 8468H | 48 | 9.850 | 12 |
+-
+-## Xeon Gold serija
+-
+-| Model | Jezgra | Cena (EUR) | Kolicina na stanju |
+-|-------|--------|------------|--------------------|
+-| Gold 6548N | 32 | 5.420 | 15 |
+-| Gold 6542Y | 24 | 3.890 | 20 |
+-| Gold 6530 | 16 | 2.450 | 25 |
+-
+-## Popusti za partnere
+-
+-- **Kupac (role_id=1):** Nema popusta - vidi samo javne specifikacije
+-- **Prodavac (role_id=2):** 15% popusta na maloprodajnu cenu
+-- **Serviser (role_id=3):** 25% popusta + prioritetna nabavka
+-
+-## Kontakt za narudzbine
+-
+-- **Email:** prodaja@it-support.rs
+-- **Tel:** +381 11 555 444
+-- **Minimalna porudzbina:** 1.000 EUR
+-- **Rok isporuke:** 5-7 radnih dana
+-
+-## Napomena
+-
+-Ove informacije su POVERLJIVE i namenjene iskljucivo ovlascenim osobama.
+-Kupci (role_id=1) ne smeju imati uvid u cene i popuste.
+diff --git a/backend/uploads/Javne specifikacije.md b/backend/uploads/Javne specifikacije.md
+deleted file mode 100644
+index d4e9c85..0000000
+--- a/backend/uploads/Javne specifikacije.md	
++++ /dev/null
+@@ -1,37 +0,0 @@
+-# Javne specifikacije - Xeon procesori
+-
+-## Modeli i osnovne karakteristike
+-
+-### Xeon Platinum 8490H
+-- **Jezgra/niti:** 60/120
+-- **Osnovni takt:** 1.9 GHz
+-- **Maksimalni turbo:** 3.5 GHz
+-- **TDP:** 350W
+-- **Socket:** LGA4677
+-- **Podržana memorija:** DDR5-4800
+-- **Maksimalno memorije:** 4TB
+-- **PCIe:** 5.0 (do 80 linija)
+-
+-### Xeon Gold 6548N
+-- **Jezgra/niti:** 32/64
+-- **Osnovni takt:** 2.1 GHz
+-- **Maksimalni turbo:** 4.0 GHz
+-- **TDP:** 250W
+-- **Socket:** LGA4677
+-- **Podržana memorija:** DDR5-4400
+-- **Maksimalno memorije:** 2TB
+-- **PCIe:** 5.0 (do 64 linije)
+-
+-## Kompatibilnost hladnjaka
+-
+-Svim Xeon procesorima potrebno je odgovarajuće hlađenje:
+-- **Vazdušno hlađenje:** Preporučuje se za sisteme do 250W TDP
+-- **Tečno hlađenje (DLC):** Obavezno za sisteme preko 300W TDP
+-- **Dynatron R33:** Preporučeni vazdušni hladnjak za servere
+-
+-## Garantni uslovi
+-
+-- Standardna garancija: 3 godine
+-- Produžena garancija: 5 godina uz doplatu
+-- Garancija pokriva fabričke defekte
+-- Garancija NE pokriva fizička oštećenja usled nepravilne instalacije
+diff --git a/backend/uploads/XEON_SERVISNI_PRIRUCNIK_OPSEZNI_FORMATIRAN.md b/backend/uploads/XEON_SERVISNI_PRIRUCNIK_OPSEZNI_FORMATIRAN.md
+deleted file mode 100644
+index 8df8cf2..0000000
+--- a/backend/uploads/XEON_SERVISNI_PRIRUCNIK_OPSEZNI_FORMATIRAN.md
++++ /dev/null
+@@ -1,460 +0,0 @@
+-OBJAŠNjENJE: ECC ispravlja grešku na DIMM_A1 (5 puta). Zameniti RAM.
+-
+-# 10. NAJČEŠĆI PROBLEMI I REŠENJA (FAQ – 50+ PITANJA)
+-
+-P1: Kolika je maksimalna temperatura za Xeon Scalable?
+-O1: Zavisi od generacije: 85°C (1., 2., 3. gen Cooper), 83°C (3. gen Ice Lake),
+-    82°C (4. gen Sapphire Rapids).
+-
+-P2: Šta znači greška CPU_TEMP_ERR?
+-O2: Procesor je prekoračio maksimalnu temperaturu. Proverite hladnjak, pastu,
+-    ventilatore i protok vazduha.
+-
+-P3: Da li mogu da koristim desktop pastu za Xeon?
+-O3: Da, ali preporučuju se kvalitetnije paste poput Arctic MX-4 ili Noctua NT-H1.
+-
+-P4: Koliko često treba menjati termalnu pastu na Xeon-u?
+-O4: Svake 2-3 godine za standardnu pastu, 3-5 godina za kvalitetnu.
+-
+-P5: Kako da proverim temperaturu CPU-a bez ulaska u OS?
+-```bash
+-O5: Preko IPMI (ipmitool), iDRAC, iLO, ili BIOS-a.
+-```
+-
+-P6: Da li Xeon podržava overklokovanje?
+-O6: Ne, Xeon Scalable nije predviđen za overklokovanje. Zaključan je.
+-
+-P7: Šta je Tcase?
+-O7: Temperatura na površini procesorskog paketa (IHS). Meri senzor na vrhu.
+-
+-P8: Šta je Tjunction?
+-O8: Temperatura unutar jezgra procesora. Obično 10-15°C viša od Tcase.
+-
+-P9: Kako da znam koji socket imam?
+-O9: Proverite model matične ploče. LGA3647 (1. i 2. gen), LGA4189 (3. gen),
+-    LGA4677 (4. gen).
+-
+-P10: Da li je LGA3647 kompatibilan sa LGA4189?
+-O10: Ne, različiti socketi. Nisu mehanički kompatibilni.
+-
+-P11: Koji hladnjak preporučujete za Xeon Platinum 8490H (350W)?
+-O11: Tečno hlađenje (DLC) ili Dynatron R33 (vazdušno, ali na granici).
+-
+-P12: Šta je PROCHOT?
+-O12: Signal koji smanjuje frekvenciju procesora kada dostigne kritičnu temperaturu.
+-
+-P13: Kako da onemogućim PROCHOT?
+-O13: Ne preporučuje se – može dovesti do oštećenja procesora.
+-
+-P14: Da li garancija pokriva pregorevanje usled lošeg hlađenja?
+-O14: Ne, garancija ne pokriva termalne probleme izazvane lošim hlađenjem.
+-
+-P15: Kako da prijavim RMA?
+-O15: Preko Intel podrške ili distributera. Potreban je serijski broj i račun.
+-
+-P16: Koliko dugo traje RMA proces?
+-O16: Obično 5-10 radnih dana.
+-
+-P17: Da li mogu da zamenim Xeon procesor bez skidanja matične ploče?
+-O17: Da, u većini servera (ručica za otpuštanje hladnjaka).
+-
+-P18: Šta je VRM?
+-O18: Voltage Regulator Module – naponski regulator na matičnoj ploči.
+-
+-P19: Kako da proverim da li je VRM pregrejan?
+-O19: Preko IPMI senzora (VRM Temp) ili termalnom kamerom.
+-
+-P20: Da li Xeon podržava ECC RAM?
+-O20: Da, svi Xeon Scalable podržavaju ECC DDR4/DDR5 memoriju.
+-
+-P21: Koja je maksimalna količina RAM-a po procesoru?
+-O21: 1. gen: 768GB, 2. gen: 1.5TB, 3. gen: 4TB, 4. gen: 4TB.
+-
+-P22: Da li Xeon podržava PCIe 4.0?
+-O22: Da, od 3. generacije (Ice Lake) pa nadalje.
+-
+-P23: Da li Xeon podržava PCIe 5.0?
+-O23: Da, od 4. generacije (Sapphire Rapids).
+-
+-P24: Šta je CXL?
+-O24: Compute Express Link – protokol za povezivanje akceleratora i memorije.
+-
+-P25: Kako da ažuriram mikrokod?
+-O25: Preko BIOS update-a ili preko Linux microcode_ctl paketa.
+-
+-P26: Da li Xeon ima integrisanu grafiku?
+-O26: Većina modela NEMA. Samo neki F modeli imaju integrisanu grafiku.
+-
+-P27: Kako da resetujem SEL?
+-```bash
+-O27: `ipmitool sel clear` (sa root privilegijama).
+-```
+-
+-P28: Šta znači POST kod 0xE0?
+-O28: Termalna greška (CPU_TEMP_ERR).
+-
+-P29: Kako da podesim brzinu ventilatora u IPMI?
+-```bash
+-O29: `ipmitool raw 0x30 0x45 0x01 0x01` (full speed) ili 0x00 (auto).
+-```
+-
+-P30: Da li mogu da koristim Xeon u desktop matičnoj ploči?
+-O30: Ne, Xeon zahteva server matičnu ploču sa odgovarajućim socketom.
+-
+-P31: Šta je TDP?
+-O31: Thermal Design Power – maksimalna količina toplote koju procesor emituje.
+-
+-P32: Kako da izračunam potrebni TDP hladnjaka?
+-O32: Hladnjak mora imati TDP veći ili jednak procesoru (npr. 350W hladnjak za 350W CPU).
+-
+-P33: Da li Xeon podržava AVX-512?
+-O33: Da, sve generacije podržavaju AVX-512 (sa različitim podskupovima).
+-
+-P34: Šta je AMX?
+-O34: Advanced Matrix Extensions – instrukcije za mašinsko učenje (4. generacija).
+-
+-P35: Kako da testiram stabilnost Xeon-a?
+-O35: Koristite Prime95, Intel Burn Test, ili Linpack.
+-
+-P36: Koliko dugo treba da traje stres test?
+-O36: Minimum 1 sat, preporučuje se 24 sata za kritične sisteme.
+-
+-P37: Šta je throttling?
+-O37: Smanjenje frekvencije procesora kako bi se smanjila temperatura.
+-
+-P38: Da li throttling skraćuje vek procesora?
+-O38: Ne, ali čest throttling ukazuje na loše hlađenje – to skraćuje vek.
+-
+-P39: Kako da proverim da li je procesor originalan?
+-O39: Proverite FPO broj na Intel-ovoj web stranici za verifikaciju.
+-
+-P40: Šta je batch broj?
+-O40: Serijski broj procesora koji označava proizvodnu seriju (npr. L014A123).
+-
+-P41: Da li mogu da vratim procesor ako nije kompatibilan?
+-O41: Zavisi od politike prodavca. Neki dozvoljavaju povrat u roku od 14 dana.
+-
+-P42: Kako da očistim staru termalnu pastu?
+-O42: Koristite izopropil alkohol (90%+) i bezvojne maramice.
+-
+-P43: Da li mogu da koristim aceteton za čišćenje paste?
+-O43: Ne – aceteton može oštetiti plastične delove procesora.
+-
+-P44: Šta je IHS?
+-O44: Integrated Heat Spreader – metalni poklopac na vrhu procesora.
+-
+-P45: Da li Xeon ima zaštitu od prenapona?
+-O45: Da, ali ne za ekstremne slučajeve (> 10% iznad specifikacije).
+-
+-P46: Kako da proverim da li je procesor mrtav?
+-O46: Testirajte u drugom serveru. Ako ne radi – mrtav je.
+-
+-P47: Da li se isplati kupiti polovni Xeon?
+-O47: Da, ali proverite garanciju i fizičko stanje (pinovi, IHS).
+-
+-P48: Šta je ESD i zašto je opasan?
+-O48: Electrostatic Discharge – može trajno oštetiti procesor.
+-
+-P49: Kako da zaštitim procesor od ESD?
+-O49: Koristite antistatički remen i radite na antistatičkoj podlozi.
+-
+-P50: Gde da nađem zvanične specifikacije za moj model?
+-O50: Na Intel ARK sajtu: https://ark.intel.com
+-
+-P51: Kako da ažuriram BIOS za novi Xeon?
+-O51: Preuzmite BIOS sa sajta proizvođača matične ploče i instalirajte preko USB-a.
+-
+-P52: Da li Xeon podržava virtualizaciju?
+-O52: Da, svi Xeon Scalable podržavaju Intel VT-x i VT-d.
+-
+-P53: Šta je Intel SGX?
+-O53: Software Guard Extensions – zaštita memorije od neovlašćenog pristupa.
+-
+-P54: Šta je Intel TDX?
+-O54: Trust Domain Extensions – napredna virtualizacija sa zaštitom (4. gen).
+-
+-P55: Kako da proverim da li je sistem stabilan nakon servisiranja?
+-O55: Pokrenite stres test od 1h i pratite temperature i greške u SEL-u.
+-
+-# 11. ZAMENA PROCESORA – KORAK PO KORAK
+-
+-## 11.1 Priprema
+-
+----
+-
+-- Isključite server iz struje (videti sekciju 3.1).
+-- Nosite antistatički remen.
+-- Postavite server na ravnu površinu.
+-- Skinite bočni poklopac kućišta.
+-- Identifikujte procesor koji menjate (CPU1, CPU2, itd.).
+-- Pripremite novi procesor (još u antistatičkoj kesi).
+-
+-## 11.2 Demontaža starog procesora
+-
+----
+-
+-# 1. Odvojite kabl ventilatora sa matične ploče.
+-# 2. Odvrnite šrafove hladnjaka (krstasto, dijagonalno).
+-   - LGA3647: 4 šrafa (T20 Torx).
+-   - LGA4189: 4 šrafa (T20 Torx).
+-   - LGA4677: 4 šrafa (T30 Torx) – pažljivo, veći moment.
+-# 3. Pažljivo podignite hladnjak ravno nagore (bez uvrtanja).
+-# 4. Ako je hladnjak zalepio, lagano ga okrenite levo-desno (ne povlačite na silu).
+-# 5. Očistite staru termalnu pastu sa procesora i hladnjaka.
+-   - Koristite izopropil alkohol i bezvojne maramice.
+-   - NE KORISTITE vodu ili deterdžent.
+-# 6. Otpustite metalnu ručicu na socket-u.
+-# 7. Pažljivo podignite poklopac socket-a.
+-# 8. Uhvatite procesor za ivice i podignite ga ravno nagore.
+-# 9. Stavite stari procesor u antistatičku kesu.
+-
+-## 11.3 Montaža novog procesora
+-
+----
+-
+-# 1. Izvadite novi procesor iz antistatičke kese (držite za ivice).
+-# 2. Proverite orijentaciju (trougao na procesoru i socket-u moraju da se poklapaju).
+-# 3. Pažljivo spustite procesor u socket – BEZ pritiska! Treba da "padne" na svoje mesto.
+-# 4. Spustite poklopac socket-a i pritisnite ručicu do kraja.
+-# 5. Nanesite termalnu pastu (veličina zrna graška – 0.5–1g).
+-# 6. Postavite hladnjak na procesor.
+-# 7. Zategnite šrafove KRSTASTO (naizmenično) sa momentom od:
+-   - 0.5 Nm za LGA3647
+-   - 0.6 Nm za LGA4189
+-   - 0.8 Nm za LGA4677
+-# 8. Priključite kabl ventilatora na matičnu ploču.
+-# 9. Proverite da li je sve čvrsto (hladnjak ne sme da se pomera).
+-
+-## 11.4 Testiranje nakon montaže
+-
+----
+-
+-# 1. Priključite napajanje i uključite server.
+-# 2. Uđite u BIOS (F2, Del) i proverite:
+-   - Da li je procesor detektovan (model, frekvencija).
+-   - Temperatura CPU-a u BIOS-u (treba da bude 30–45°C u idle-u).
+-# 3. Pokrenite OS i instalirajte potrebne drajvere (ako je noviji procesor).
+-# 4. Pokrenite stres test (npr. Prime95) u trajanju od 1h.
+-# 5. Pratite temperature (ne sme preći Tcase max).
+-# 6. Proverite SEL da nema grešaka.
+-# 7. Ako je sve prošlo dobro – servisiranje je uspešno.
+-
+-# 12. DODATNE PREPORUKE
+-
+-## 12.1 Ažuriranje BIOS/UEFI
+-
+----
+-
+-Pre instalacije novijeg Xeon procesora, OBAVEZNO ažurirajte BIOS na najnoviju
+-verziju. Stari BIOS možda ne podržava novije mikro kodove.
+-
+-KAKO:
+-# 1. Preuzmite BIOS sa sajta proizvođača matične ploče.
+-# 2. Kopirajte na FAT32 USB fleš disk.
+-# 3. Uđite u BIOS i izaberite "BIOS Update" ili "Flash".
+-# 4. Pratite uputstva na ekranu.
+-# 5. NEMOJTE isključivati server tokom update-a (može trajati 5-10 minuta).
+-
+-## 12.2 Stress testiranje
+-
+----
+-
+-Preporučeni alati za stres test:
+-- Prime95 (Windows/Linux) – najpoznatiji, opterećuje sve jezgra.
+-- Intel Burn Test (Windows) – brz, agresivan test.
+-- Linpack (Linux) – koristi se u HPC okruženjima.
+-- CPU-Z (Windows) – ima ugrađen stres test.
+-
+-TRAJANJE:
+-- Minimalno: 1 sat.
+-- Preporučeno: 24 sata za kritične sisteme.
+-- Za data center: 72 sata sa različitim opterećenjima.
+-
+-## 12.3 Praćenje performansi
+-
+----
+-
+-Koristite sledeće alate za praćenje performansi:
+-- htop / top (Linux) – opterećenje CPU-a.
+-- iostat (Linux) – I/O performanse.
+-- vmstat (Linux) – memorija i procesi.
+-- Performance Monitor (Windows) – sve metrike.
+-- Intel VTune – napredni profiler.
+-- Intel Advisor – optimizacija koda.
+-
+-## 12.4 Prevencija problema
+-
+----
+-
+-- Redovno čistite prašinu (svakih 6 meseci).
+-- Redovno proveravajte SEL (svake nedelje).
+-- Zamenite termalnu pastu na svake 3 godine.
+-- Ažurirajte BIOS na svake 2 godine.
+-- Pratite temperature u realnom vremenu (preko IPMI ili SNMP).
+-- Instalirajte UPS (neprekidno napajanje) za stabilan napon.
+-- Osigurajte dovoljan protok vazduha u server sobi.
+-- Postavite upozorenja (alerts) za temperaturu, napon i ventilatore.
+-
+-# 13. DODATAK A – TABELE SA PINOVIMA SOCKETA
+-
+-LGA3647 (1. i 2. generacija):
+-- Ukupno pinova: 3647
+-- Broj pinova za napajanje: ~400
+-- Broj pinova za podatke: ~1200
+-- Ostatak: GND (uzemljenje)
+-- Raspored: 4x4 matrica podržava 4 procesora
+-
+-LGA4189 (3. generacija):
+-- Ukupno pinova: 4189
+-- Broj pinova za napajanje: ~450
+-- Broj pinova za podatke: ~1400
+-- Ostatak: GND
+-- Raspored: 4x4 matrica, podržava do 8 procesora (Cooper Lake)
+-
+-LGA4677 (4. generacija):
+-- Ukupno pinova: 4677
+-- Broj pinova za napajanje: ~500
+-- Broj pinova za podatke: ~1600
+-- Ostatak: GND
+-- Raspored: 4x4 matrica, podržava CXL i PCIe 5.0
+-
+-# 14. DODATAK B – SPISAK KOMANDI ZA LINUX
+-
+-# 1. Čitanje temperature CPU-a:
+-```bash
+-   `cat /sys/class/thermal/thermal_zone*/temp
+-```
+-
+-# 2. Čitanje frekvencije CPU-a:
+-```bash
+-   `cat /proc/cpuinfo | grep "MHz"
+-```
+-
+-# 3. Čitanje informacija o CPU-u:
+-```bash
+-   `lscpu
+-```
+-
+-# 4. Čitanje SEL (IPMI):
+-```bash
+-   `ipmitool sel list
+-```
+-
+-# 5. Brisanje SEL:
+-```bash
+-   `ipmitool sel clear
+-```
+-
+-# 6. Podešavanje brzine ventilatora (full speed):
+-```bash
+-   `ipmitool raw 0x30 0x45 0x01 0x01
+-```
+-
+-# 7. Čitanje napona CPU-a:
+-```bash
+-   `ipmitool sensor get "CPU1 Vcore"
+-```
+-
+-# 8. Gašenje servera:
+-```bash
+-   `shutdown -h now
+-```
+-
+-# 9. Restart servera:
+-```bash
+-   `reboot
+-```
+-
+-# 10. Praćenje logova u realnom vremenu:
+-```bash
+-    `tail -f /var/log/syslog
+-```
+-
+-# 11. Provera opterećenja CPU-a:
+-```bash
+-    `top
+-```
+-
+-# 12. Provera opterećenja CPU-a (detaljnije):
+-```bash
+-    `htop
+-```
+-
+-# 13. Provera I/O performansi:
+-```bash
+-    `iostat -x 1
+-```
+-
+-# 14. Provera memorije:
+-```bash
+-    `free -h
+-```
+-
+-# 15. Provera diskova:
+-```bash
+-    `df -h
+-```
+-
+-# 15. DODATAK C – SPISAK ALATA I NJIHOVA NAMENA
+-
+-ALATI ZA MONITORING:
+-# 1. IPMI – upravljanje serverom nezavisno od OS-a
+-# 2. iDRAC – Dell-ov remote management
+-# 3. iLO – HPE-ov remote management
+-# 4. SNMP – mrežni monitoring (Zabbix, Nagios, PRTG)
+-# 5. Intel DCM – data center monitoring
+-# 6. HWMonitor – Windows temperatura i napon
+-# 7. Open Hardware Monitor – open source monitoring
+-# 8. lm-sensors – Linux senzori (sensors komanda)
+-
+-ALATI ZA STRES TEST:
+-# 1. Prime95 – CPU stres test
+-# 2. Intel Burn Test – agresivni stres test
+-# 3. Linpack – HPC stres test
+-# 4. CPU-Z – stres test i informacije
+-# 5. Geekbench – benchmark
+-
+-ALATI ZA ČIŠĆENJE:
+-# 1. Izopropil alkohol (90%+) – čišćenje paste
+-# 2. Bezvojne maramice – bez ostataka
+-# 3. Kompresovani vazduh – čišćenje prašine
+-# 4. Antistatička četka – nežno čišćenje pinova
+-# 5. Usisivač sa ESD zaštitom – za prašinu (oprezno)
+-
+-ALATI ZA MONTAŽU:
+-# 1. PH2 križni odvijač
+-# 2. T20 Torx odvijač
+-# 3. T30 Torx odvijač
+-# 4. Moment ključ (0.5–1.5 Nm)
+-# 5. Plastična lopatica za pastu
+-# 6. Antistatički remen za ručni zglob
+-# 7. Antistatička podloga
+-# 8. Fles lampa
+-
+-# 16. ZAVRŠNE NAPOMENE I LITERATURA
+-
+-Ovaj priručnik je sačinjen na osnovu zvaničnih Intel specifikacija, iskustava
+-servisera i preporuka proizvođača matičnih ploča. Svi podaci su tačni na dan
+-04.07.2026. godine.
+-
+-PREPORUČENA LITERATURA:
+-# 1. Intel Xeon Scalable Processor Datasheet – Volume 1 (Intel Corporation)
+-# 2. Intel Xeon Scalable Processor Datasheet – Volume 2 (Intel Corporation)
+-# 3. Intel 64 and IA-32 Architectures Software Developer's Manual (Intel)
+-# 4. Intel IPMI 2.0 Specification (Intel)
+-# 5. Server System Reference Guide (SuperMicro, Dell, HPE)
+-
+-VAŽNO: Uvek pratite zvanične upute proizvođača vašeg servera. Ovaj priručnik
+-služi kao opšti vodič i ne zamenjuje specifične upute za vaš model.
+-
+-ZA DODATNA PITANJA:
+-- Intel podrška: https://www.intel.com/support
+-- Forum: https://community.intel.com
+-- Reddit: r/homelab, r/sysadmin
+-
+-
+----
+-
+-KRAJ DOKUMENTA
+-
+----
+diff --git a/scripts/create_frontend_doc.py b/scripts/create_frontend_doc.py
+deleted file mode 100644
+index 7d03091..0000000
+--- a/scripts/create_frontend_doc.py
++++ /dev/null
+@@ -1,397 +0,0 @@
+-# -*- coding: utf-8 -*-
+-"""Skript za kreiranje objasnjenje_frontend.txt dokumentacije."""
+-
+-import sys
+-from pathlib import Path
+-
+-if hasattr(sys.stdout, "reconfigure"):
+-    sys.stdout.reconfigure(encoding="utf-8")
+-
+-EXPORT_DIR = Path("D:/OneDrive/Desktop/Potraga za sreckom/MI Systems Co/RAG/Chatbot/export")
+-CHATBOT_DIR = Path("E:/chatbot")
+-ENCODING = "utf-8"
+-
+-CONTENT = """\
+-==============================================================================
+-OBJAŠNJENJE FRONTEND ARHITEKTURE - RAG CHATBOT
+-==============================================================================
+-React 18 + Vite + Tailwind CSS + Axios
+-Poslednja izmena: Jul 2026
+-
+-==============================================================================
+-1. TEHNOLOŠKI STEK
+-==============================================================================
+-
+-| Komponenta       | Tehnologija                          |
+-|------------------|--------------------------------------|
+-| UI framework     | React 18 (JSX)                       |
+-| Build tool       | Vite 5                               |
+-| Stilizovanje     | Tailwind CSS 3 (custom accent boje)  |
+-| HTTP klijent     | Axios (interceptor pattern)          |
+-| Autentifikacija  | JWT (lokalno skladištenje)           |
+-| Streaming        | SSE preko ReadableStream API         |
+-| CSS animacije    | Custom keyframes (fadeInUp, bounce)  |
+-
+-==============================================================================
+-2. STRUKTURA FRONTEND FOLDERA
+-==============================================================================
+-
+-frontend/
+-  ├── index.html                  # HTML ulazna tačka
+-  ├── package.json                # npm zavisnosti
+-  ├── vite.config.js              # Vite konfiguracija (port 5173)
+-  ├── postcss.config.js           # PostCSS (Tailwind + Autoprefixer)
+-  ├── tailwind.config.js          # Tailwind tema (accent boje)
+-  ├── .env                        # API URL (VITE_API_URL)
+-  └── src/
+-      ├── main.jsx                # React entry point
+-      ├── index.css               # Globalni CSS + animacije
+-      ├── App.jsx                 # Root komponenta (uslovno renderovanje)
+-      ├── context/
+-      │   └── AuthContext.jsx     # Auth stanje (login/logout/token)
+-      ├── services/
+-      │   └── api.js              # Axios instanca + svi API pozivi
+-      └── components/
+-          ├── LoginForm.jsx       # Login forma
+-          ├── ChatBox.jsx         # Glavni chat interfejs
+-          └── AdminPanel.jsx      # Admin panel (upload/brisanje dokumenata)
+-
+-==============================================================================
+-3. DETALJNO OBJAŠNJENJE KOMPONENTI
+-==============================================================================
+-
+---- index.html ---
+-- Standardni HTML5 boilerplate.
+-- Postavlja <html lang="sr"> (srpski jezik).
+-- Uključuje <div id="root"> za React mount.
+-- Font: system UI (antialiased).
+-- Favicon: 💻 emoji kao SVG data URI.
+-
+---- package.json ---
+-- Zavisnosti: react, react-dom, axios.
+-- Dev zavisnosti: vite, @vitejs/plugin-react, tailwindcss,
+-  postcss, autoprefixer.
+-- Skripte: dev (vite), build (vite build), preview (vite preview).
+-
+---- vite.config.js ---
+-- Minimalna konfiguracija.
+-- Plugin: @vitejs/plugin-react (React Fast Refresh).
+-- Server port: 5173, ne otvara browser automatski (open: false).
+-
+---- tailwind.config.js ---
+-- Content: index.html + svi fajlovi u src/.
+-- Custom accent boje: indigo/ljubičasta paleta (50-950).
+-  Koristi se za primarne akcije, linkove, hover stanja.
+-- Ostatak: default Tailwind paleta.
+-
+---- .env ---
+-- VITE_API_URL: URL backend servera (http://localhost:8000).
+-- Frontend koristi VITE_ prefiks (Vite standard) za izlaganje
+-  env varijabli browseru.
+-
+---- src/main.jsx ---
+-- React 18 createRoot API.
+-- Omotava celu aplikaciju u AuthProvider (context za auth).
+-- Učitava index.css (Tailwind + animacije).
+-- StrictMode je uključen (detektuje potencijalne probleme).
+-
+---- src/index.css ---
+-- Tailwind direktive: @tailwind base/components/utilities.
+-- Custom scrollbar (tanak, indigo boja).
+-- Animacije:
+-  - fadeInUp: poruke ulaze odozdo sa blagim scale (0.35s, cubic-bezier).
+-  - sourceReveal: citati se pojavljuju sa fade + translate.
+-  - iconPulse: pulsirajući shadow na bot ikoni tokom strima.
+-  - loadingBounce: 3 tačkice koje odskaču (staggered delay).
+-- Staggered delay: .source-item, .loading-dot:nth-child(2/3).
+-- Klase: .message-enter, .source-item, .icon-streaming, .loading-dot.
+-
+---- src/App.jsx ---
+-- Root komponenta, samo 10 linija koda.
+-- Logika: ako user nije ulogovan → LoginForm.
+-  Ako jeste → ChatBox u full-screen layoutu.
+-- Layout: h-screen, bg-gray-950, max-w-4xl centered sa border-x.
+-
+---- src/context/AuthContext.jsx ---
+-- React Context + Provider pattern.
+-- Stanje: user (objekat), token (string), loading (bool), error (string).
+-- Inicijalizacija iz localStorage (persistent login).
+-- login(username, password):
+-  1. Poziva api.loginUser().
+-  2. Dekodira JWT payload (base64url → JSON) da izvuče
+-     is_admin, role_id.
+-  3. Čuva token i user u localStorage.
+-  4. Ažurira state.
+-  5. Obrada grešaka: 401 (pogrešni kredencijali),
+-     429 (rate limiting, captcha_required flag).
+-- logout(): briše localStorage, resetuje state.
+-- Sluša 'auth:unauthorized' event iz api.js interceptora
+-  (automatski logout kad token istekne).
+-
+---- src/services/api.js ---
+-- Axios instanca sa baseURL = VITE_API_URL.
+-- REQUEST INTERCEPTOR: automatski dodaje Authorization: Bearer
+-  header iz localStorage.access_token na svaki zahtev.
+-- RESPONSE INTERCEPTOR:
+-  - 401: briše token/user iz localStorage, emituje
+-    'auth:unauthorized' događaj.
+-  - 429: loguje captcha_required flag ako postoji.
+-- API funkcije:
+-  - loginUser(username, password) → POST /api/auth/login
+-    (application/x-www-form-urlencoded za OAuth2PasswordRequestForm).
+-  - sendMessage(message) → POST /api/chat (JSON response).
+-  - sendMessageStream(message, onToken, onSources, onDone):
+-    → POST /api/chat/stream (SSE).
+-    - Fetch API (ne Axios) za stream podršku.
+-    - AbortController sa 60s timeout-om.
+-    - Parsira SSE linije (data: {...}), poziva callback-ove.
+-    - Fallback: ako stream završi bez 'done' eventa, ipak
+-      poziva onDone() da se ne zaglavi u "sending" stanju.
+-  - uploadDocument(file, requiredRoleId, sourceName, onProgress)
+-    → POST /api/admin/documents/upload (multipart, sa progress).
+-  - listDocuments() → GET /api/admin/documents.
+-  - deleteDocument(pointId) → DELETE /api/admin/documents/{id}.
+-  - deleteDocumentBySource(sourceName) → DELETE .../source/{name}.
+-  - listUsers() → GET /api/admin/users.
+-
+---- src/components/LoginForm.jsx ---
+-- Jednostavna forma: username input, password input, submit dugme.
+-- Inputi sa placeholder-ovima (serviser, ••••••).
+-- Prikazuje test kredencijale u info kutiji (serviser/123, itd.).
+-- Error poruka (crvena kutija) ako login ne uspe.
+-- Loading stanje: spinner + "Prijavljivanje..." tekst.
+-- Disabled stanje: inputi i dugme zaključani tokom slanja.
+-- Footer: "RAG Chatbot © 2026".
+-
+---- src/components/ChatBox.jsx ---
+-- GLAVNA KOMPONENTA - najsloženija.
+-- Stanje: messages[], input, sending, showAdmin, selectedSource.
+-- Inicijalna poruka: "Zdravo, {username}! Kako vam mogu pomoći?"
+-- Header:
+-  - Logo + naziv "IT Asistent" + "Powered by FastAPI".
+-  - Admin dugme (samo za is_admin=true) → otvara AdminPanel modal.
+-  - Status: zeleni indikator + "Prijavljen: {username}".
+-  - Logout dugme (crveno na hover).
+-  - Responzivan: flex-wrap na mobilnom.
+-- Messages area:
+-  - User poruke: desno, indigo pozadina, rounded-br-md.
+-  - Bot poruke: levo, tamno siva pozadina, rounded-bl-md.
+-  - Hover efekat: blago podizanje (-translate-y-0.5).
+-  - Sources/Citations: klikabilna kartica sa:
+-    - Naziv izvora (📄 ikonica).
+-    - Relevatnost u %.
+-    - Role ≥ X.
+-    - Klik → otvara modal sa celim sadržajem izvora.
+-  - Loading indikator: 3 animirane tačkice + "Razmišljam...".
+-  - Auto-scroll na dno pri novoj poruci.
+-- Input area:
+-  - Text input sa placeholder-om.
+-  - Submit dugme sa ikonicom (strelica gore).
+-  - Disabled tokom slanja.
+-- SSE streaming:
+-  - Unikatan ID (Date.now()) za svaku bot poruku.
+-  - onToken: immutable update (map + spread) na messages.
+-  - onSources: postavlja sources na bot poruku.
+-  - onDone: setSending(false).
+-  - Error handling: fallback poruka ako stream padne.
+-- Source Content Modal:
+-  - Header: naziv izvora, relevatnost, role.
+-  - Content: pre-wrap tekst u font-sans.
+-  - Klik na pozadinu ili X zatvara modal.
+-- Admin Panel Modal:
+-  - Uslovno renderovanje AdminPanel komponente.
+-
+---- src/components/AdminPanel.jsx ---
+-- Modal sa 2 taba: Upload dokumenta i Indeksirani dokumenti.
+-- Upload tab:
+-  - Drag-and-drop zona (klik za file picker).
+-  - Prihvaćeni formati: PDF, DOCX, DOC, TXT, MD, CSV.
+-  - Prikaz imena i veličine fajla nakon izbora.
+-  - Opcioni naziv izvora (text input).
+-  - Radio dugmad za required_role_id (Kupac/Prodavac/Serviser).
+-  - Progress bar tokom uploada (gradient indigo).
+-  - Success/Error poruke.
+-  - Rezultat: broj chunkova, role, vreme indeksiranja.
+-- Documents tab:
+-  - Lista indeksiranih dokumenata iz Qdrant-a.
+-  - Svaki dokument: naziv, broj chunkova, role_id.
+-  - Preview teksta (line-clamp-2).
+-  - Delete dugme (crvena hover) → confirmation dialog.
+-  - Refresh dugme.
+-  - Loading/Error/Empty stanja.
+-- Confirmation dialog za brisanje:
+-  - Warning ikonica, pitanje "Obriši dokument?".
+-  - Otkaži / Obriši dugmad.
+-- Staggered animacija: source-item sa animationDelay.
+-
+-==============================================================================
+-4. SSE (SERVER-SENT EVENTS) STREAMING PROTOKOL
+-==============================================================================
+-
+-Frontend → Backend:
+-  POST /api/chat/stream
+-  Authorization: Bearer <token>
+-  Content-Type: application/json
+-  Body: {"message": "Korisničko pitanje"}
+-
+-Backend → Frontend (SSE format):
+-  data: {"type": "token", "content": "deo odgovora..."}
+-  data: {"type": "token", "content": "još teksta..."}
+-  data: {"type": "sources", "content": [{"source": "...", ...}]}
+-  data: {"type": "done"}
+-
+-Frontend parsiranje:
+-  1. Čita stream kroz ReadableStream.getReader().
+-  2. Akumulira buffer, deli po \n\n (SSE delimiter).
+-  3. Parsira JSON iz svake 'data: ' linije.
+-  4. dispatch: token → onToken(), sources → onSources(),
+-     done → onDone().
+-  5. Timeout: 60s (AbortController) - ako backend ne odgovori,
+-     prekida se zahtev.
+-  6. Fallback: ako stream završi bez 'done' eventa,
+-     poziva onDone() da oslobodi UI.
+-
+-==============================================================================
+-5. AUTENTIFIKACIJA (JWT FLOW)
+-==============================================================================
+-
+-1. Login forma → POST /api/auth/login (form-urlencoded).
+-2. Backend vraća {access_token: "eyJ...", token_type: "bearer"}.
+-3. Frontend dekodira JWT payload (base64url):
+-   {
+-     "sub": "serviser",
+-     "role_id": 3,
+-     "is_admin": false,
+-     "exp": 1712345678
+-   }
+-4. Čuva token u localStorage (persistent).
+-5. Svaki API zahtev automatski dobija Authorization header
+-   preko Axios request interceptora.
+-6. Ako backend vrati 401 → response interceptor briše
+-   localStorage i emituje 'auth:unauthorized' događaj.
+-7. AuthContext sluša događaj i resetuje stanje → prikazuje
+-   LoginForm.
+-8. Logout dugme ručno briše localStorage i resetuje stanje.
+-
+-==============================================================================
+-6. RBAC (ROLE-BASED ACCESS CONTROL) - FRONTEND PERSPEKTIVA
+-==============================================================================
+-
+-Frontend ima ograničenu RBAC logiku - glavni filter je na backendu.
+-- JWT payload sadrži role_id (1-3) i is_admin (bool).
+-- Admin Panel dugme je vidljivo SAMO ako je is_admin = true
+-  (uslovno renderovanje u ChatBox.jsx).
+-- ChatBox prikazuje "role ≥ X" na svakom citatu (samo info).
+-- Sve ostalo filtriranje radi backend (Qdrant MetadataFilters).
+-- Frontend NIKADA ne odlučuje koji dokumenti su vidljivi -
+-  to je isključivo backend odgovornost.
+-
+-==============================================================================
+-7. STANJA KORISNIČKOG INTERFEJSA
+-==============================================================================
+-
+-Za svaku komponentu definisana su sledeća stanja:
+-
+-LoginForm:
+-  - Idle: prikaz forme, inputi prazni.
+-  - Loading: spinner, inputi disabled, "Prijavljivanje...".
+-  - Error: crvena poruka ispod inputa (pogrešna lozinka,
+-    server nedostupan, rate limit).
+-  - Uspeh: redirect na ChatBox (ne prikazuje se u LoginForm).
+-
+-ChatBox:
+-  - Prazan: samo pozdravna poruka od bota.
+-  - Normal: korisnik i bot poruke.
+-  - Sending: loading indikator, input disabled.
+-  - Stream: bot poruka se popunjava token po token.
+-  - Error: "❌ Došlo je do greške..." poruka.
+-  - Source modal otvoren: prikaz celog teksta izvora.
+-
+-AdminPanel:
+-  - Upload tab:
+-    - Idle: drag-drop zona.
+-    - File selected: prikaz imena i veličine.
+-    - Uploading: progress bar.
+-    - Success: zelena poruka + detalji (chunks, role, time).
+-    - Error: crvena poruka.
+-  - Documents tab:
+-    - Loading: spinner + "Učitavanje dokumenata...".
+-    - Empty: "Nema indeksiranih dokumenata".
+-    - Error: crvena poruka.
+-    - Normal: lista dokumenata sa delete opcijom.
+-    - Deleting: confirmation dialog.
+-    - Delete success/error: obaveštenje na vrhu liste.
+-
+-==============================================================================
+-8. ANIMACIJE I MIKROINTERAKCIJE
+-==============================================================================
+-
+-- fadeInUp (0.35s): svaka nova poruka, sa stagger delay-om.
+-- sourceReveal (0.3s): citati se pojavljuju posle poruke.
+-- loadingBounce (1.2s): tri tačkice dok čeka odgovor.
+-- iconPulse (1.5s): bot ikonica pulsira tokom strima.
+-- Hover: poruke se blago podižu (-translate-y-0.5).
+-- Hover: source kartice menjaju boju i podižu se.
+-- Hover: admin panel dugmad menjaju boju.
+-- Transition: sve interakcije imaju duration-200.
+-
+-==============================================================================
+-9. RESPONZIVNOST
+-==============================================================================
+-
+-- Header: flex-wrap na mobilnom (prelama u redove).
+-- Poruke: max-w-[75%] na širokom, full-width na uskom.
+-- Modali: max-w-lg (login), max-w-2xl (source), sa mx-4 margin.
+-- Input: full-width.
+-- Admin panel: max-h-[90vh] sa overflow-y-auto.
+-- Sve u: sm: prefiksi za veće ekrane (padding, breakpoints).
+-- Testirano na: desktop (1920x1080), tablet, mobile.
+-
+-==============================================================================
+-10. INSTALACIJA I POKRETANJE
+-==============================================================================
+-
+-  cd frontend
+-  npm install
+-  # Podesi .env:
+-  #   VITE_API_URL=http://localhost:8000
+-  npm run dev          # Development server na portu 5173
+-  npm run build        # Produkcioni build u dist/
+-
+-==============================================================================
+-11. ISTORIJA IZMENA
+-==============================================================================
+-
+-2026-07-20 - Inicijalna struktura fajla
+-- Kompletan opis frontend arhitekture.
+-
+-==============================================================================
+-KRAJ DOKUMENTACIJE
+-==============================================================================
+-"""
+-
+-
+-def write_frontend_doc():
+-    # U export folder
+-    export_path = EXPORT_DIR / "objasnjenje_frontend.txt"
+-    EXPORT_DIR.mkdir(parents=True, exist_ok=True)
+-    export_path.write_text(CONTENT, encoding=ENCODING)
+-    print(f"objasnjenje_frontend.txt kreiran ({export_path})")
+-
+-    # Kopiraj na E:\\chatbot
+-    chatbot_path = CHATBOT_DIR / "objasnjenje_frontend.txt"
+-    CHATBOT_DIR.mkdir(parents=True, exist_ok=True)
+-    chatbot_path.write_text(CONTENT, encoding=ENCODING)
+-    print(f"Kopiran na {chatbot_path}")
+-
+-    print(f"\nVeličina: {export_path.stat().st_size / 1024:.1f} KB")
+-
+-
+-if __name__ == "__main__":
+-    print("=" * 60)
+-    print("Kreiranje objasnjenje_frontend.txt...")
+-    print("=" * 60)
+-    write_frontend_doc()
+-    print("=" * 60)
+-    print("Gotovo!")
+-    print("=" * 60)
+diff --git a/scripts/export_codes.py b/scripts/export_codes.py
+deleted file mode 100644
+index 6cb3011..0000000
+--- a/scripts/export_codes.py
++++ /dev/null
+@@ -1,388 +0,0 @@
+-# -*- coding: utf-8 -*-
+-"""Skript za eksportovanje backend i frontend kodova u tekstualne fajlove."""
+-import sys
+-# Postavljamo stdout enkodiranje da izbegnemo UnicodeEncodeError
+-if hasattr(sys.stdout, "reconfigure"):
+-    sys.stdout.reconfigure(encoding="utf-8")
+-
+-import os
+-import sys
+-from pathlib import Path
+-
+-# Putanje
+-PROJECT_DIR = Path("E:/Chatbot/chatbot_app")
+-EXPORT_DIR = Path("D:/OneDrive/Desktop/Potraga za sreckom/MI Systems Co/RAG/Chatbot/export")
+-
+-ENCODING = "utf-8"
+-
+-def write_file_safe(path: Path, content: str) -> None:
+-    """Upisuje fajl sa UTF-8 enkodiranjem, bez BOM."""
+-    path.write_text(content, encoding=ENCODING)
+-
+-
+-def read_file_safe(path: Path) -> str:
+-    """Čita fajl sa UTF-8 enkodiranjem."""
+-    return path.read_text(encoding=ENCODING)
+-
+-
+-SEPARATOR = "#" * 60 + "\n\n"
+-
+-# ──────────────────────────────────────────────
+-# 1. BACKEND FAJLOVI
+-# ──────────────────────────────────────────────
+-BACKEND_FILES = [
+-    "backend/api/__init__.py",
+-    "backend/api/auth.py",
+-    "backend/api/chat.py",
+-    "backend/api/admin.py",
+-    "backend/core/__init__.py",
+-    "backend/core/config.py",
+-    "backend/core/db.py",
+-    "backend/core/logger.py",
+-    "backend/core/security.py",
+-    "backend/main.py",
+-    "backend/models/__init__.py",
+-    "backend/models/user.py",
+-    "backend/models/chat_history.py",
+-    "backend/rag/__init__.py",
+-    "backend/rag/engine.py",
+-    "backend/rag/chat_history.py",
+-    "backend/rag/system_prompt.py",
+-]
+-
+-OUTPUT_BACKEND = EXPORT_DIR / "backend_kodovi.txt"
+-
+-
+-def write_backend_export():
+-    with open(OUTPUT_BACKEND, "w", encoding=ENCODING, errors="replace") as out:
+-        for rel_path in BACKEND_FILES:
+-            abs_path = PROJECT_DIR / rel_path
+-            out.write(f"--- POCETAK FAJLA: ..\\chatbot_local\\{rel_path.replace('/', '\\\\')} ---\n")
+-            if abs_path.exists():
+-                content = abs_path.read_text(encoding=ENCODING, errors="replace")
+-                out.write(content)
+-                if not content.endswith("\n"):
+-                    out.write("\n")
+-            else:
+-                out.write(f"# FAJL NE POSTOJI: {abs_path}")
+-            out.write("\n--- KRAJ FAJLA ---\n\n")
+-            out.write(SEPARATOR)
+-    print(f"backend_kodovi.txt kreiran ({OUTPUT_BACKEND})")
+-
+-
+-# ──────────────────────────────────────────────
+-# 2. FRONTEND FAJLOVI
+-# ──────────────────────────────────────────────
+-FRONTEND_FILES = [
+-    "frontend/index.html",
+-    "frontend/package.json",
+-    "frontend/postcss.config.js",
+-    "frontend/tailwind.config.js",
+-    "frontend/vite.config.js",
+-    # .env je namerno izostavljen - sadrzi osetljive API kljuceve
+-    "frontend/src/main.jsx",
+-    "frontend/src/index.css",
+-    "frontend/src/App.jsx",
+-    "frontend/src/services/api.js",
+-    "frontend/src/context/AuthContext.jsx",
+-    "frontend/src/components/LoginForm.jsx",
+-    "frontend/src/components/ChatBox.jsx",
+-    "frontend/src/components/AdminPanel.jsx",
+-]
+-
+-OUTPUT_FRONTEND = EXPORT_DIR / "frontend_kodovi.txt"
+-
+-
+-def write_frontend_export():
+-    with open(OUTPUT_FRONTEND, "w", encoding=ENCODING, errors="replace") as out:
+-        for rel_path in FRONTEND_FILES:
+-            abs_path = PROJECT_DIR / rel_path
+-            out.write(f"--- POCETAK FAJLA: ..\\chatbot_local\\{rel_path.replace('/', '\\\\')} ---\n")
+-            if abs_path.exists():
+-                content = abs_path.read_text(encoding=ENCODING, errors="replace")
+-                out.write(content)
+-                if not content.endswith("\n"):
+-                    out.write("\n")
+-            else:
+-                out.write(f"# FAJL NE POSTOJI: {abs_path}")
+-            out.write("\n--- KRAJ FAJLA ---\n\n")
+-            out.write(SEPARATOR)
+-    print(f"frontend_kodovi.txt kreiran ({OUTPUT_FRONTEND})")
+-
+-
+-# ──────────────────────────────────────────────
+-# 3. OBJASNJENJE BACKEND (ažurirano)
+-# ──────────────────────────────────────────────
+-def write_objasnjenje():
+-    content = """\
+-==============================================================================
+-OBJAŠNJENJE BACKEND ARHITEKTURE - RAG CHATBOT
+-==============================================================================
+-FastAPI + LlamaIndex + Qdrant + PostgreSQL + Groq LLM
+-Poslednja izmena: Jul 2026
+-
+-==============================================================================
+-1. TEHNOLOŠKI STEK
+-==============================================================================
+-
+-| Komponenta      | Tehnologija                                |
+-|-----------------|--------------------------------------------|
+-| Web framework   | FastAPI (Python 3.12+)                     |
+-| RAG framework   | LlamaIndex (hibridna pretraga)             |
+-| Vektorska baza  | Qdrant (Cloud, dim=1536)                   |
+-| Relaciona baza  | PostgreSQL 18 (lokalni EDB)                |
+-| LLM             | OpenAI - gpt-4o-mini (max_tokens=300)      |
+-| Embedding model | OpenAI - text-embedding-3-small (dim=1536) |
+-| Dokument parser | LlamaParse + MarkdownNodeParser            |
+-| Autentifikacija | JWT (HS256, istek 60min)                  |
+-| ORM             | SQLModel (SQLAlchemy + Pydantic)           |
+-| Lozinke         | bcrypt hash                                |
+-
+-==============================================================================
+-2. STRUKTURA FOLDERA (backend/)
+-==============================================================================
+-
+-backend/
+-  ├── main.py                 # Ulazna tačka, lifespan, seed korisnici
+-  ├── api/
+-  │   ├── auth.py             # POST /api/auth/login (JWT + bcrypt)
+-  │   ├── chat.py             # POST /api/chat, POST /api/chat/stream (SSE)
+-  │   └── admin.py            # Admin rute (upload, brisanje, listanje)
+-  ├── core/
+-  │   ├── config.py           # Pydantic Settings (env varijable)
+-  │   ├── db.py               # PostgreSQL konekcija (SQLModel)
+-  │   ├── security.py         # JWT kreiranje
+-  │   └── logger.py           # Centralizovano logovanje
+-  ├── rag/
+-  │   ├── engine.py           # RAG engine (hybrid retriever, RBAC, RRF)
+-  │   ├── chat_history.py     # Učitavanje/čuvanje istorije iz PostgreSQL
+-  │   └── system_prompt.py    # Sistemski prompt za LLM
+-  ├── models/
+-  │   ├── user.py             # SQLModel: User tabela
+-  │   └── chat_history.py     # SQLModel: ChatHistory tabela
+-  ├── uploads/                # Privremeni fajlovi za indeksiranje
+-  └── tests/                  # pytest testovi (ako postoje)
+-
+-==============================================================================
+-3. DETALJNO OBJAŠNJENJE MODULA
+-==============================================================================
+-
+---- main.py ---
+-- FastAPI aplikacija sa lifespan funkcijom (zamenjuje stari startup/shutdown).
+-- Startup: inicijalizacija logera, PostgreSQL tabele (create_all),
+-  seedovanje testnih korisnika (admin, serviser, prodavac, kupac) sa
+-  bcrypt hash-ovanim lozinkama, automatsko kreiranje Qdrant kolekcije
+-  ako ne postoji, kreiranje payload indeksa za filtriranje.
+-- Lozinke se hashiraju preko _hash_password() (bcrypt.hashpw + gensalt).
+-- CORS podešen dozvoljava sve (*) - za produkciju suziti.
+-- Shutdown: loguje gašenje aplikacije.
+-
+---- api/auth.py ---
+-- Jedan endpoint: POST /api/auth/login.
+-- Prima username/password preko OAuth2PasswordRequestForm.
+-- Proverava bcrypt hash preko bcrypt.checkpw().
+-- Vraća JWT token sa sub (username), role_id (1-3), is_admin (bool).
+-- Token ističe za 60 minuta (podesivo u .env).
+-
+---- api/chat.py ---
+-- Dva endpointa: POST /api/chat (JSON) i POST /api/chat/stream (SSE).
+-- get_current_user() dependency dekodira JWT i izvlači username, role_id,
+-  is_admin. Vraća 401 za istekao/nevalidan token.
+-- Chat: kreira get_chat_engine() sa korisničkim podacima, prosleđuje
+-  role_id za RBAC filtriranje.
+-- SSE streaming šalje tokene u realnom vremenu, zatim sources (citati),
+-  pa done signal. Fallback za kraj strima bez done eventa.
+-- Prikazuje samo 1 najbolji izvor (source) po odgovoru.
+-
+---- api/admin.py ---
+-- require_admin dependency: proverava is_admin flag, 403 ako nije admin.
+-- GET /api/admin/users - lista svih korisnika iz PostgreSQL.
+-- GET /api/admin/documents - lista indeksiranih dokumenata iz Qdrant-a,
+-  grupisana po source-u.
+-- DELETE /api/admin/documents/source/{source_name} - briše sve chunkove
+-  za dati source iz Qdrant-a. Invalidira BM25 cache.
+-- DELETE /api/admin/documents/{point_id} - briše jedan point.
+-- POST /api/admin/documents/upload - upload fajla (PDF, DOCX, TXT, MD,
+-  CSV) sa izborom required_role_id (1-3).
+-  * Za PDF/ DOCX/PPTX: LlamaParse (result_type=markdown) + MarkdownNodeParser
+-    (čuva tabele i strukturu)
+-  * Za TXT/MD/CSV: SimpleDirectoryReader + SentenceSplitter (chunk_size=1024)
+-  Fajl se indeksira u Qdrant, zatim briše sa diska. Ograničenje: 50MB.
+-
+---- core/config.py ---
+-- Pydantic Settings klasa, učitava .env fajl.
+-- Ključne varijable:
+-  - DATABASE_URL: PostgreSQL konekcioni string
+-  - JWT_SECRET_KEY, JWT_ALGORITHM, JWT_ACCESS_TOKEN_EXPIRE_MINUTES
+-  - QDRANT_URL, QDRANT_API_KEY, QDRANT_COLLECTION, QDRANT_EMBEDDING_DIM
+-  - OPENAI_API_KEY, LLAMA_CLOUD_API_KEY
+-  - CORS_ORIGINS, UPLOAD_DIR
+-- Baca ValueError ako DATABASE_URL nije postavljen.
+-
+---- core/db.py ---
+-- create_engine(SQLAlchemy) sa DATABASE_URL i echo=True (SQL logovanje).
+-- get_session() generator funkcija za FastAPI Depends().
+-
+---- core/security.py ---
+-- Učitava JWT parametre iz settings.
+-- create_access_token(data): kreira JWT sa exp (vreme isteka).
+-- oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login").
+-
+---- core/logger.py ---
+-- setup_logging(): konfiguriše root logger sa konzolnim handlerom.
+-- Format: vreme | ime_logera | nivo | poruka.
+-- Zaštićen od duplog pozivanja.
+-
+---- rag/engine.py ---
+-- GLOBALNA KONFIGURACIJA: OpenAI embedding model (text-embedding-3-small,
+-  dim=1536) i OpenAI LLM (gpt-4o-mini) sa temperature=0.1,
+-  max_tokens=300. API ključ se prosleđuje eksplicitno.
+-- LAZY INICIJALIZACIJA: Qdrant klijent i indeks se inicijalizuju
+-  tek pri prvom pozivu get_chat_engine() (omogućava main.py da
+-  startuje Qdrant pre importa engine modula).
+-- BM25 docstore: Gradi SimpleDocumentStore iz Qdrant payload-a.
+-  Parsira _node_content JSON da izvuče tekst i metapodatke.
+-- HybridRetriever klasa:
+-  - Kombinuje vektorski retriever (Qdrant, sa MetadataFilters za RBAC)
+-    i BM25 retriever (keyword pretraga).
+-  - RBAC: BM25 ne podržava MetadataFilters direktno, pa se RBAC
+-    primenjuje naknadnim filtriranjem (required_role_id).
+-  - Admin (is_admin=True) preskače RBAC filter.
+-  - RRF (Reciprocal Rank Fusion) spaja rezultate sa k=60.
+-  - Deduplikacija po normalizovanom tekstu (case-insensitive, bez
+-    višestrukih razmaka).
+-- Chat memorija:
+-  - Ako je prosleđen SQLModel Session: učitava istoriju iz PostgreSQL.
+-  - Ako nije: in-memory ChatMemoryBuffer po username-u.
+-- get_chat_engine() vraća CondensePlusContextChatEngine sa system_prompt,
+-  hybrid retrieverom i memorijom.
+-
+---- rag/chat_history.py ---
+-- load_chat_history(): učitava poslednjih 50 poruka iz PostgreSQL.
+-- save_chat_messages(): čuva user i assistant poruke u bazu.
+-
+---- rag/system_prompt.py ---
+-- Detaljan sistemski prompt na srpskom jeziku.
+-- Ključna pravila: odgovarati ISKLJUČIVO na osnovu konteksta.
+-- Ako odgovor nije u kontekstu: "Nemam taj podatak u bazi znanja."
+-- Zabranjeno izmišljanje modela, cena, specifikacija.
+-
+---- models/user.py ---
+-- SQLModel tabela: id, username (unique), hashed_password, role_id,
+-  role_name, is_admin.
+-- role_id: 1=Kupac, 2=Prodavac, 3=Serviser.
+-- is_admin: ortogonalno na role_id (admin može biti bilo koja rola).
+-
+---- models/chat_history.py ---
+-- SQLModel tabela: id, username, role (user/assistant), content, created_at.
+-
+---- main.py (Qdrant auto-migracija) ---
+-- Kolekcija se kreira automatski pri startu ako ne postoji (size=1536).
+-- Ako postoji sa pogrešnom dimenzijom (npr. starih 384), briše se i
+-  kreira nova (auto-migracija pri promeni embedding modela).
+-
+-==============================================================================
+-4. RBAC (ROLE-BASED ACCESS CONTROL) SISTEM
+-==============================================================================
+-
+-- required_role_id na svakom dokumentu/chunku definiše minimalnu ulogu.
+-- Filter: required_role_id <= user_role_id (LTE operator).
+-- Kupac (role_id=1): vidi samo Javne specifikacije.
+-- Prodavac (role_id=2): vidi Javne specifikacije + Interni cenovnik.
+-- Serviser (role_id=3): vidi sva 3 dokumenta.
+-- Admin (is_admin=true): vidi SVE bez obzira na role_id.
+-
+-==============================================================================
+-5. INSTALACIJA I POKRETANJE
+-==============================================================================
+-
+-PostgreSQL (lokalni):
+-- Port: 5433 (EDB installer default)
+-- Korisnik: postgres
+-- Lozinka: admin123
+-- Baza: postgres
+-
+-Backend:
+-  cd backend
+-  uv sync
+-  # podesi .env sa DATABASE_URL, OPENAI_API_KEY, LLAMA_CLOUD_API_KEY,
+-  #   JWT_SECRET_KEY, QDRANT_URL, QDRANT_API_KEY
+-  uv run fastapi dev main.py --port 8000
+-
+-Qdrant kolekcija se kreira automatski pri prvom pokretanju.
+-Dokumenti se upload-uju kroz admin panel (POST /api/admin/documents/upload).
+-
+-Frontend:
+-  cd frontend
+-  npm install
+-  npm run dev
+-
+-Test korisnici (bcrypt hash-ovane lozinke):
+-  admin / admin123 (role_id=3, is_admin=true)
+-  serviser / 123 (role_id=3, Technician)
+-  prodavac / 123 (role_id=2, Sales)
+-  kupac / 123 (role_id=1, Customer)
+-
+-==============================================================================
+-6. ISTORIJA IZMENA
+-==============================================================================
+-
+-2026-07-20 - Inicijalna struktura fajla
+-- Opisana kompletna backend arhitektura.
+-
+-2026-07-20 (Migracija: Supabase -> Lokalni PostgreSQL):
+-- Zamenjen DATABASE_URL iz Supabase u lokalni PostgreSQL (port 5433).
+-- Ažuriran .env.example sa svim ključevima.
+-- Seed korisnici prebačeni na lokalnu bazu.
+-
+-2026-07-20 (Dodat bcrypt hashing):
+-- Lozinke se hashiraju pre čuvanja (bcrypt.hashpw + gensalt).
+-- Login proverava sa bcrypt.checkpw().
+-- Stari plain-text korisnici obrisani i ponovo kreirani sa hash-ovima.
+-
+-2026-07-20 (Popravljen linting i formatiranje):
+-- Fix E402 u main.py (importi rutera premešteni na vrh fajla).
+-- Pokrenut ruff format na svim fajlovima.
+-- Svi linting/format checkovi prolaze (ruff check, ruff format --check, mypy).
+-
+-==============================================================================
+-KRAJ DOKUMENTACIJE
+-==============================================================================
+-"""
+-
+-    # 1. Sačuvaj u export folderu
+-    output_path = EXPORT_DIR / "objasnjenje_backend.txt"
+-    output_path.write_text(content, encoding="utf-8")
+-    print(f"✅ objasnjenje_backend.txt kreiran ({output_path})")
+-
+-    # 2. Kopiraj na E:\\chatbot
+-    dest_path = Path("E:/chatbot/objasnjenje_backend.txt")
+-    dest_path.parent.mkdir(parents=True, exist_ok=True)
+-    dest_path.write_text(content, encoding="utf-8")
+-    print(f"✅ Kopiran na {dest_path}")
+-
+-
+-# ──────────────────────────────────────────────
+-# MAIN
+-# ──────────────────────────────────────────────
+-if __name__ == "__main__":
+-    print("=" * 60)
+-    print("Generisanje export fajlova...")
+-    print("=" * 60)
+-
+-    # Kreiraj export folder ako ne postoji
+-    EXPORT_DIR.mkdir(parents=True, exist_ok=True)
+-
+-    write_backend_export()
+-    write_frontend_export()
+-    write_objasnjenje()
+-
+-    # Velicine fajlova
+-    print("\n" + "=" * 60)
+-    print("Pregled generisanih fajlova:")
+-    for f in ["backend_kodovi.txt", "frontend_kodovi.txt", "objasnjenje_backend.txt"]:
+-        fp = EXPORT_DIR / f
+-        if fp.exists():
+-            kb = fp.stat().st_size / 1024
+-            print(f"  {f}: {kb:.1f} KB")
+-    print("=" * 60)
