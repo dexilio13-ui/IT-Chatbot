@@ -4,7 +4,7 @@ emoji: 💻
 colorFrom: indigo
 colorTo: purple
 sdk: gradio
-sdk_version: 5.25.0
+sdk_version: 4.44.1
 app_file: app.py
 pinned: false
 license: mit
@@ -57,7 +57,7 @@ Svaka poruka se klasifikuje **pojedinacno**:
 ### Korak 1: Kreiraj Space
 
 1. Idi na https://huggingface.co/new-space
-2. Ime: `orion-chatbot` (ili sta zelis)
+2. Ime: `it-asistent` (ili sta zelis)
 3. SDK: **Gradio**
 4. Space Hardware: **ZeroGPU** (besplatno — Nvidia RTX Pro 6000 Blackwell)
    > ⚠️ **Vazno:** Besplatni HF nalozi ne mogu da koriste Gradio na CPU basic.
@@ -127,7 +127,12 @@ U **Settings → Repository Secrets** dodaj:
 Space ce se automatski build-ovati.
 - Prvi build traje ~5-10 minuta
 - Sledeci buildovi ~1 minut
-- URL: `https://tvoje-ime-orion-chatbot.hf.space`
+- URL: `https://dexilio-it-asistent.hf.space`
+
+> **Ako build padne** sa "Cannot install gradio==4.44.1 and gradio==5.25.0":
+> 1. Idi na HF Space → **Settings** → na dnu klikni **Factory rebuild**
+> 2. Ovo brise Docker cache i krece od nule
+> 3. Build traje ~10 minuta ali resava konflikt
 
 ### Lokalno testiranje (pre deploy-a)
 
@@ -169,7 +174,7 @@ GitHub Action (svaki dan u 3h)
     ↓
 scraper_cene.py → generise komponente.json
     ↓
-git push na huggingface.co/spaces/dexilio/orion-chatbot
+git push na huggingface.co/spaces/dexilio/it-asistent
     ↓
 komponente.json zavrsava u korenu HF Space-a
     ↓
@@ -205,7 +210,7 @@ ga odmah koristi (bez restart-a, zahvaljujuci kesiranju).
 
 1. Da li je `HF_TOKEN` dodat u GitHub Secrets?
 2. Da li HF token ima `write` dozvolu?
-3. Da li se HF Space zove `orion-chatbot`? (Action push-uje na `dexilio/orion-chatbot`)
+3. Da li se HF Space zove `it-asistent`? (Action push-uje na `dexilio/it-asistent`)
 4. Pokreni Action rucno: GitHub → Actions → Daily Orion Scrape → Run workflow
 
 ---

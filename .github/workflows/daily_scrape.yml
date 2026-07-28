@@ -32,7 +32,7 @@ jobs:
         run: |
           git config --global user.email "action@github.com"
           git config --global user.name "GitHub Action"
-          git clone https://user:$HF_TOKEN@huggingface.co/spaces/dexilio/orion-chatbot hf_space
+          git clone https://user:$HF_TOKEN@huggingface.co/spaces/dexilio/it-asistent hf_space
           cp komponente.json hf_space/komponente.json
           cd hf_space
           git add komponente.json
