@@ -8,6 +8,7 @@ sdk_version: 5.25.0
 app_file: app.py
 pinned: false
 license: mit
+python_version: "3.10"
 ---
 
 # 💻 IT Asistent — Konfigurator Racunara
@@ -58,8 +59,19 @@ Svaka poruka se klasifikuje **pojedinacno**:
 1. Idi na https://huggingface.co/new-space
 2. Ime: `orion-chatbot` (ili sta zelis)
 3. SDK: **Gradio**
-4. Space Hardware: **CPU basic** (besplatno — 2 vCPU, 16GB RAM)
+4. Space Hardware: **ZeroGPU** (besplatno — Nvidia RTX Pro 6000 Blackwell)
+   > ⚠️ **Vazno:** Besplatni HF nalozi ne mogu da koriste Gradio na CPU basic.
+   > ZeroGPU je jedina besplatna opcija koja podrzava Gradio.
 5. Klikni **Create Space**
+
+### Korak 1b: Podesi ZeroGPU (ako si vec kreirao Space)
+
+Ako si vec kreirao Space, uradi sledece:
+
+1. Otvori Space → **Settings** tab
+2. Na dnu, u sekciji **Hardware**, klikni **Configure Hardware**
+3. Izaberi **ZeroGPU** (besplatno, NVIDIA RTX Pro 6000 Blackwell)
+4. Klikni **Save** i sacekaj restart Space-a
 
 ### Korak 2: Upload fajlove
 

@@ -26,6 +26,11 @@ if _BACKEND_DIR not in sys.path:
 
 import gradio as gr
 
+# spaces je potreban za ZeroGPU kompatibilnost na HF.
+# Iako nas app ne koristi GPU (samo OpenAI API), HF zahteva
+# ovaj import da bi Space mogao da se pokrene na ZeroGPU hardveru.
+import spaces  # noqa: F401
+
 from rag.engine import get_chat_engine
 from rag.classifier import is_chitchat_query
 from rag.configurator import is_config_query
