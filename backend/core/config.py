@@ -44,9 +44,35 @@ class Settings(BaseSettings):
     CORS_ORIGINS: list[str] = ["*"]
     UPLOAD_DIR: str = str(BACKEND_DIR / "uploads")
 
+    # ── Podesavanja ponasanja asistenta ─────────────────────
+    ENABLE_CHITCHAT: bool = True
+    # Kada je ukljuceno, asistent odgovara na pozdrave i caskanje
+    # pored tehnickih pitanja iz baze znanja.
+
+    CHITCHAT_TEMPERATURE: float = 0.4
+    # Temperatura za LLM kada je caskanje ukljuceno.
+    # 0.1 = precizno/faktografski, 0.3-0.5 = prirodnije za caskanje.
+    # Kad je caskanje iskljuceno, koristi se 0.1 (fiksno).
+
+    # ── Cene se ucitavaju automatski sa HF Space-a ────────────
+    # GitHub Action svakodnevno push-uje komponente.json direktno
+    # na HF Space. Configurator prvo cita taj fajl, pa pada na
+    # backend/data/components.json ako ne postoji.
+    # Nisu potrebne dodatne env varijable.
+
+
+import logging
 
 settings = Settings()
 
-# Validacija da je DATABASE_URL postavljen (jedino mesto gde proveravamo)
+# Validacija da je DATABASE_URL postavljen.
+# Ovo JE obavezno za regularni rad (backend/server), ali nije obavezno
+# za HF Spaces gde se koristi in-memory umesto PostgreSQL.
+# HF Spaces treba da postavi HF_SPACE=true u env varijablama.
 if not settings.DATABASE_URL:
-    raise ValueError("DATABASE_URL nije postavljen. Proveri .env fajl ili okruženje.")
+    logger = logging.getLogger("config")
+    logger.warning(
+        "DATABASE_URL nije postavljen. "
+        "Istorija razgovora nece biti sacuvana u bazi. "
+        "Koristi se in-memory cuvanje (samo za ovu sesiju)."
+    )

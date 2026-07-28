@@ -1,0 +1,40 @@
+name: Daily Orion Scrape
+
+on:
+  schedule:
+    - cron: '0 3 * * *'       # Svaki dan u 3:00 UTC
+  workflow_dispatch:           # Moze i rucno pokretanje
+
+jobs:
+  scrape-and-push:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 📥 Checkout kod
+        uses: actions/checkout@v4
+
+      - name: 🐍 Podesavanje Pythona
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: 📦 Instalacija biblioteka
+        run: |
+          pip install requests beautifulsoup4
+
+      - name: 🕷️ Pokretanje skrejpovanja
+        run: |
+          python scraper_cene.py
+
+      - name: 📤 Guranje fajla na Hugging Face Space
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: |
+          git config --global user.email "action@github.com"
+          git config --global user.name "GitHub Action"
+          git clone https://user:$HF_TOKEN@huggingface.co/spaces/dexilio/orion-chatbot hf_space
+          cp komponente.json hf_space/komponente.json
+          cd hf_space
+          git add komponente.json
+          git commit -m "Auto update cena $(date '+%Y-%m-%d')" || echo "Nema promena"
+          git push

@@ -1,0 +1,65 @@
+{
+  "components": {
+    "cpu": [
+      { "name": "AMD Ryzen 5 5600X", "socket": "AM4", "tdp": 65, "price": 189, "grade": "mid" },
+      { "name": "AMD Ryzen 7 5700X", "socket": "AM4", "tdp": 65, "price": 279, "grade": "mid" },
+      { "name": "AMD Ryzen 7 7800X3D", "socket": "AM5", "tdp": 120, "price": 449, "grade": "high" },
+      { "name": "AMD Ryzen 9 7950X", "socket": "AM5", "tdp": 170, "price": 589, "grade": "enthusiast" },
+      { "name": "Intel Core i5-13400F", "socket": "LGA1700", "tdp": 65, "price": 209, "grade": "mid" },
+      { "name": "Intel Core i7-13700K", "socket": "LGA1700", "tdp": 125, "price": 379, "grade": "high" },
+      { "name": "Intel Core i9-14900K", "socket": "LGA1700", "tdp": 125, "price": 589, "grade": "enthusiast" }
+    ],
+    "motherboard": [
+      { "name": "MSI B550-A PRO", "socket": "AM4", "form_factor": "ATX", "ram_type": "DDR4", "price": 89, "grade": "mid" },
+      { "name": "ASUS ROG STRIX B550-F", "socket": "AM4", "form_factor": "ATX", "ram_type": "DDR4", "price": 149, "grade": "high" },
+      { "name": "Gigabyte B650 GAMING X", "socket": "AM5", "form_factor": "ATX", "ram_type": "DDR5", "price": 169, "grade": "mid" },
+      { "name": "ASUS ROG STRIX X670E-E", "socket": "AM5", "form_factor": "ATX", "ram_type": "DDR5", "price": 439, "grade": "enthusiast" },
+      { "name": "MSI PRO Z790-P", "socket": "LGA1700", "form_factor": "ATX", "ram_type": "DDR5", "price": 199, "grade": "mid" },
+      { "name": "ASUS ROG STRIX Z790-E", "socket": "LGA1700", "form_factor": "ATX", "ram_type": "DDR5", "price": 429, "grade": "high" }
+    ],
+    "ram": [
+      { "name": "16GB (2x8) DDR4 3200MHz", "type": "DDR4", "capacity": 16, "sticks": 2, "price": 39, "grade": "mid" },
+      { "name": "32GB (2x16) DDR4 3200MHz", "type": "DDR4", "capacity": 32, "sticks": 2, "price": 62, "grade": "mid" },
+      { "name": "32GB (2x16) DDR5 5600MHz", "type": "DDR5", "capacity": 32, "sticks": 2, "price": 99, "grade": "high" },
+      { "name": "32GB (2x16) DDR5 6000MHz CL30", "type": "DDR5", "capacity": 32, "sticks": 2, "price": 119, "grade": "high" },
+      { "name": "64GB (2x32) DDR5 6000MHz", "type": "DDR5", "capacity": 64, "sticks": 2, "price": 209, "grade": "enthusiast" }
+    ],
+    "gpu": [
+      { "name": "NVIDIA GeForce RTX 4060", "vram": 8, "tdp": 115, "price": 329, "grade": "mid" },
+      { "name": "NVIDIA GeForce RTX 4060 Ti", "vram": 8, "tdp": 160, "price": 419, "grade": "mid" },
+      { "name": "NVIDIA GeForce RTX 4070", "vram": 12, "tdp": 200, "price": 559, "grade": "high" },
+      { "name": "NVIDIA GeForce RTX 4070 Ti Super", "vram": 16, "tdp": 285, "price": 799, "grade": "high" },
+      { "name": "NVIDIA GeForce RTX 4080 Super", "vram": 16, "tdp": 320, "price": 1099, "grade": "enthusiast" },
+      { "name": "NVIDIA GeForce RTX 4090", "vram": 24, "tdp": 450, "price": 1899, "grade": "enthusiast" },
+      { "name": "AMD Radeon RX 7600", "vram": 8, "tdp": 165, "price": 289, "grade": "mid" },
+      { "name": "AMD Radeon RX 7800 XT", "vram": 16, "tdp": 263, "price": 499, "grade": "high" }
+    ],
+    "storage": [
+      { "name": "SSD 500GB NVMe M.2", "type": "NVMe", "capacity": 500, "price": 44, "grade": "mid" },
+      { "name": "SSD 1TB NVMe M.2", "type": "NVMe", "capacity": 1000, "price": 74, "grade": "mid" },
+      { "name": "SSD 2TB NVMe M.2", "type": "NVMe", "capacity": 2000, "price": 129, "grade": "high" },
+      { "name": "HDD 2TB 7200rpm", "type": "HDD", "capacity": 2000, "price": 59, "grade": "mid" },
+      { "name": "HDD 4TB 7200rpm", "type": "HDD", "capacity": 4000, "price": 99, "grade": "mid" }
+    ],
+    "psu": [
+      { "name": "650W 80+ Gold", "watts": 650, "efficiency": "80+ Gold", "modular": "semi", "price": 79, "grade": "mid" },
+      { "name": "750W 80+ Gold", "watts": 750, "efficiency": "80+ Gold", "modular": "full", "price": 109, "grade": "high" },
+      { "name": "850W 80+ Gold", "watts": 850, "efficiency": "80+ Gold", "modular": "full", "price": 129, "grade": "high" },
+      { "name": "1000W 80+ Platinum", "watts": 1000, "efficiency": "80+ Platinum", "modular": "full", "price": 199, "grade": "enthusiast" },
+      { "name": "1200W 80+ Platinum", "watts": 1200, "efficiency": "80+ Platinum", "modular": "full", "price": 269, "grade": "enthusiast" }
+    ],
+    "case": [
+      { "name": "Mid Tower ATX (basic)", "form_factor": "ATX", "price": 49, "grade": "mid" },
+      { "name": "Mid Tower ATX with mesh", "form_factor": "ATX", "price": 79, "grade": "mid" },
+      { "name": "Mid Tower ATX tempered glass", "form_factor": "ATX", "price": 109, "grade": "high" },
+      { "name": "Full Tower ATX", "form_factor": "E-ATX", "price": 159, "grade": "high" }
+    ],
+    "cooler": [
+      { "name": "Box cooler (stock)", "type": "air", "price": 0, "grade": "mid", "note": "Dolazi uz CPU" },
+      { "name": "Air cooler 120mm", "type": "air", "price": 39, "grade": "mid" },
+      { "name": "Air cooler dual tower", "type": "air", "price": 69, "grade": "high" },
+      { "name": "AIO 240mm liquid", "type": "liquid", "price": 109, "grade": "high" },
+      { "name": "AIO 360mm liquid", "type": "liquid", "price": 159, "grade": "enthusiast" }
+    ]
+  }
+}

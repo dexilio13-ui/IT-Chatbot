@@ -8,8 +8,9 @@ from llama_index.core.chat_engine import CondensePlusContextChatEngine
 from llama_index.core.chat_engine.types import BaseChatEngine
 from llama_index.core.base.llms.types import ChatMessage, MessageRole
 
-# Uvozimo sistemski prompt iz odvojenog fajla
-from rag.system_prompt import SYSTEM_PROMPT as SYSTEM_PROMPT_DETAILED
+# Uvozimo funkciju za sistemski prompt iz odvojenog fajla
+from rag.system_prompt import get_system_prompt, SYSTEM_PROMPT as SYSTEM_PROMPT_DETAILED
+from rag.configurator import get_components_catalog, is_config_query
 from llama_index.core.memory import ChatMemoryBuffer
 from llama_index.core.retrievers import BaseRetriever
 from llama_index.core.schema import NodeWithScore, QueryBundle, TextNode
@@ -307,7 +308,8 @@ class HybridRetriever(BaseRetriever):
 # Rečnik za čuvanje istorije razgovora po korisniku (fallback ako nema DB).
 _chat_memories: Dict[str, ChatMemoryBuffer] = {}
 
-# Koristimo detaljan sistemski prompt iz system_prompt.py (stroza pravila protiv halucinacija)
+# Podrazumevani sistemski prompt (caskanje ukljuceno)
+# Koristi se globalno u Settings.llm / inicijalizaciji ako nije drugacije navedeno
 SYSTEM_PROMPT = SYSTEM_PROMPT_DETAILED
 
 
@@ -319,6 +321,8 @@ def get_chat_engine(
     role_id: int,
     is_admin: bool = False,
     session: Optional[Session] = None,
+    chitchat_enabled: bool = True,
+    config_mode: bool = False,
 ) -> BaseChatEngine:
     """
     Kreira CondensePlusContextChatEngine sa hybridnim retriever-om
@@ -343,10 +347,27 @@ def get_chat_engine(
         is_admin: Ako je True, preskače RBAC filter (vidi sve dokumente).
         session: Opcioni SQLModel Session. Ako je prosleđen, učitava istoriju
             iz PostgreSQL umesto iz in-memory dict-a.
+        chitchat_enabled: Ako je True, model odgovara i na pozdrave/caskanje.
+            Ako je False, strogo samo iz baze znanja.
+        config_mode: Ako je True, ukljucuje konfigurator PC komponenti
+            i ubacuje katalog sa cenama u system prompt.
 
     Returns:
         BaseChatEngine instanca konfigurisana za specifičnog korisnika.
     """
+    # Odaberi odgovarajuci sistemski prompt na osnovu podesavanja
+    system_prompt = get_system_prompt(
+        chitchat_enabled=chitchat_enabled,
+        config_mode=config_mode,
+    )
+
+    # Ako je config_mode aktivan, dodaj katalog komponenti direktno u system prompt
+    if config_mode:
+        catalog = get_components_catalog()
+        if catalog:
+            system_prompt += "\n\n" + catalog
+        logger.info("Konfigurator mod: ucitano %d karaktera kataloga.", len(catalog))
+
     # Lazy inicijalizacija Qdrant veze (omogucava auto-start iz lifespan-a)
     _ensure_initialized()
 
@@ -418,9 +439,27 @@ def get_chat_engine(
             _chat_memories[username] = ChatMemoryBuffer.from_defaults(token_limit=1500)
         memory = _chat_memories[username]
 
+    # ── Odaberi LLM sa odgovarajucom temperaturom ────────────
+    # Kada je caskanje ukljuceno, koristimo visu temperaturu
+    # (podesivu preko CHITCHAT_TEMPERATURE u .env fajlu) da
+    # odgovori budu prirodniji. Za strogi RAG rezim ostaje 0.1.
+    if chitchat_enabled:
+        llm = OpenAI(
+            model="gpt-4o-mini",
+            temperature=settings.CHITCHAT_TEMPERATURE,
+            max_tokens=2048,  # Veci limit za konfiguracije (cene, specifikacije)
+            api_key=settings.OPENAI_API_KEY or None,
+        )
+        logger.debug(
+            "Chitchat mod: temperatura LLM = %.1f", settings.CHITCHAT_TEMPERATURE
+        )
+    else:
+        llm = Settings.llm
+        logger.debug("Strogi RAG mod: temperatura LLM = 0.1")
+
     return CondensePlusContextChatEngine.from_defaults(
         retriever=hybrid_retriever,
         memory=memory,
-        system_prompt=SYSTEM_PROMPT,
-        llm=Settings.llm,
+        system_prompt=system_prompt,
+        llm=llm,
     )

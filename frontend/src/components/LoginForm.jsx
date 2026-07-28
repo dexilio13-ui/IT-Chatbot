@@ -8,7 +8,7 @@ import { useAuth } from '../context/AuthContext'
  * application/x-www-form-urlencoded formatu (OAuth2PasswordRequestForm).
  */
 export default function LoginForm() {
-  const { login, loading, error } = useAuth()
+  const { login, loginAsGuest, loading, error } = useAuth()
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
 
@@ -19,7 +19,7 @@ export default function LoginForm() {
     try {
       await login(username.trim(), password)
     } catch {
-      // Greška je već postavljena u AuthContext-u
+      // Greska je vec postavljena u AuthContext-u
     }
   }
 
@@ -32,14 +32,14 @@ export default function LoginForm() {
             💻
           </div>
           <h1 className="text-2xl font-bold text-white">IT Asistent</h1>
-          <p className="text-gray-500 text-sm mt-1">Prijavite se za nastavak</p>
+          <p className="text-gray-500 text-sm mt-1">Tehnicka podrska i konfiguracija</p>
         </div>
 
         {/* Login form */}
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label htmlFor="username" className="block text-sm font-medium text-gray-400 mb-1.5">
-              Korisničko ime
+              Korisnicko ime
             </label>
             <input
               id="username"
@@ -118,6 +118,34 @@ export default function LoginForm() {
             )}
           </button>
         </form>
+
+        {/* Divider */}
+        <div className="relative my-6">
+          <div className="absolute inset-0 flex items-center">
+            <div className="w-full border-t border-gray-800"></div>
+          </div>
+          <div className="relative flex justify-center text-xs">
+            <span className="bg-gray-950 px-3 text-gray-500">ili</span>
+          </div>
+        </div>
+
+        {/* Guest button */}
+        <button
+          onClick={loginAsGuest}
+          className="
+            w-full bg-gray-800 hover:bg-gray-700
+            text-gray-300 hover:text-white rounded-xl px-4 py-3 font-medium text-sm
+            transition-all duration-200
+            border border-gray-700 hover:border-gray-600
+            flex items-center justify-center gap-2
+          "
+        >
+          <svg className="w-5 h-5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+              d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+          </svg>
+          Nastavi kao gost
+        </button>
 
         {/* Footer */}
         <p className="text-center text-xs text-gray-600 mt-8">

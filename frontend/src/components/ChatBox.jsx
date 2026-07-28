@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react'
-import { sendMessageStream } from '../services/api'
+import { sendMessageStream, sendGuestMessageStream, generateGuestId } from '../services/api'
 import { useAuth } from '../context/AuthContext'
 import AdminPanel from './AdminPanel'
 
@@ -11,12 +11,24 @@ import AdminPanel from './AdminPanel'
  * Koristi SSE strimovanje preko ReadableStream API-ja.
  */
 export default function ChatBox() {
-  const { user, logout } = useAuth()
+  const { user, logout, isGuest } = useAuth()
   const [showAdmin, setShowAdmin] = useState(false)
+
+  // Generisi guest ID jednom (ako je gost)
+  const [guestId] = useState(() => {
+    if (isGuest) {
+      const stored = localStorage.getItem('guest_id')
+      return stored || generateGuestId()
+    }
+    return null
+  })
+
   const [messages, setMessages] = useState([
     {
       role: 'bot',
-      text: `Zdravo, ${user?.username || 'korisniče'}! Kako vam mogu pomoći?`,
+      text: isGuest
+        ? 'Zdravo! Dobro dosli. Slobodno pitajte za tehnicku podrsku ili konfiguraciju racunara.'
+        : `Zdravo, ${user?.username || 'korisnice'}! Kako vam mogu pomoci?`,
     },
   ])
   const [input, setInput] = useState('')
@@ -55,33 +67,37 @@ export default function ChatBox() {
     setSending(true)
 
     try {
-      await sendMessageStream(
-        text,
-        // onToken - dodaje token u poslednju bot poruku (Immutable nacin)
-        (token) => {
-          setMessages((prev) =>
-            prev.map((msg) =>
-              msg.id === botMessageId
-                ? { ...msg, text: msg.text + token }
-                : msg
-            )
+      // Definisemo callback funkcije
+      const onToken = (token) => {
+        setMessages((prev) =>
+          prev.map((msg) =>
+            msg.id === botMessageId
+              ? { ...msg, text: msg.text + token }
+              : msg
           )
-        },
-        // onSources - postavlja izvore na bot poruku (Immutable nacin)
-        (sources) => {
-          setMessages((prev) =>
-            prev.map((msg) =>
-              msg.id === botMessageId
-                ? { ...msg, sources: sources }
-                : msg
-            )
+        )
+      }
+
+      const onSources = (sources) => {
+        setMessages((prev) =>
+          prev.map((msg) =>
+            msg.id === botMessageId
+              ? { ...msg, sources: sources }
+              : msg
           )
-        },
-        // onDone
-        () => setSending(false)
-      )
+        )
+      }
+
+      const onDone = () => setSending(false)
+
+      // Gost ili regular korisnik?
+      if (isGuest && guestId) {
+        await sendGuestMessageStream(text, guestId, onToken, onSources, onDone)
+      } else {
+        await sendMessageStream(text, onToken, onSources, onDone)
+      }
     } catch (err) {
-      console.error('Greška pri slanju poruke:', err)
+      console.error('Greska pri slanju poruke:', err)
       setMessages((prev) =>
         prev.map((msg) =>
           msg.id === botMessageId && !msg.text
@@ -131,24 +147,44 @@ export default function ChatBox() {
         {/* Desna strana: status korisnika + logout dugme - bez preklapanja */}
         <div className="flex items-center gap-3">
           <span className="flex items-center gap-2 text-xs text-gray-500 whitespace-nowrap">
-            <span className="w-2 h-2 rounded-full bg-green-500 shadow-lg shadow-green-500/50"></span>
-            Prijavljen: <span className="text-gray-300 font-medium">{user?.username}</span>
+            <span className={`w-2 h-2 rounded-full shadow-lg ${isGuest ? 'bg-yellow-500 shadow-yellow-500/50' : 'bg-green-500 shadow-green-500/50'}`}></span>
+            {isGuest ? 'Gost' : `Prijavljen: `}
+            {!isGuest && <span className="text-gray-300 font-medium">{user?.username}</span>}
           </span>
-          <button
-            onClick={logout}
-            title="Odjavi se"
-            className="
-              bg-gray-800 hover:bg-red-900/50 hover:text-red-400
-              text-gray-400 rounded-lg p-2.5 text-sm
-              transition-all duration-200 border border-gray-700 hover:border-red-800/50
-              shadow-lg
-            "
-          >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-            </svg>
-          </button>
+          {isGuest ? (
+            <button
+              onClick={logout}
+              title="Prijavi se"
+              className="
+                bg-gray-800 hover:bg-accent-600 hover:text-white
+                text-accent-400 rounded-lg px-3 py-2 text-xs font-medium
+                transition-all duration-200 border border-gray-700 hover:border-accent-500/50
+                shadow-lg flex items-center gap-1.5
+              "
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                  d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1" />
+              </svg>
+              Prijavi se
+            </button>
+          ) : (
+            <button
+              onClick={logout}
+              title="Odjavi se"
+              className="
+                bg-gray-800 hover:bg-red-900/50 hover:text-red-400
+                text-gray-400 rounded-lg p-2.5 text-sm
+                transition-all duration-200 border border-gray-700 hover:border-red-800/50
+                shadow-lg
+              "
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                  d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+              </svg>
+            </button>
+          )}
         </div>
       </div>
 

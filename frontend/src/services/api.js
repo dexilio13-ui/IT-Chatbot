@@ -106,6 +106,46 @@ export async function sendMessage(message) {
 export async function sendMessageStream(message, onToken, onSources, onDone) {
   const token = localStorage.getItem('access_token')
 
+  await _streamChat('/api/chat/stream', { message }, token, onToken, onSources, onDone)
+}
+
+// ────────────────────────────────────────────────────────────────
+// GUEST API funkcije (bez JWT autentifikacije)
+// ────────────────────────────────────────────────────────────────
+
+/**
+ * Slanje poruke kao gost (bez login-a) sa SSE strimovanjem.
+ *
+ * @param {string} message - Korisnička poruka
+ * @param {string} sessionId - UUID sesije (generiše se na frontendu)
+ * @param {(token: string) => void} onToken
+ * @param {(sources: Array) => void} onSources
+ * @param {() => void} onDone
+ */
+export async function sendGuestMessageStream(message, sessionId, onToken, onSources, onDone) {
+  await _streamChat('/api/chat/guest/stream', { message, session_id: sessionId }, null, onToken, onSources, onDone)
+}
+
+/**
+ * Generiše UUID za gost sesiju (koristi crypto API).
+ */
+export function generateGuestId() {
+  // Vraća kratki ID (prvih 12 karaktera UUID-a)
+  return 'guest_' + crypto.randomUUID().slice(0, 8)
+}
+
+// ────────────────────────────────────────────────────────────────
+// INTERNA funkcija za SSE strimovanje (deljena između auth i guest)
+// ────────────────────────────────────────────────────────────────
+
+async function _streamChat(endpoint, body, token, onToken, onSources, onDone) {
+  const headers = {
+    'Content-Type': 'application/json',
+  }
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`
+  }
+
   // Timeout od 60 sekundi - ako backend ne odgovori za to vreme
   // (npr. Groq rate limit sa retry-jem od 120s), prekidamo zahtev
   // da se ne zaglavimo beskonacno u "sending" stanju
