@@ -18,6 +18,9 @@ import logging
 import sys
 import traceback
 
+# Gradio 4.x — nema SSR (Server-Side Rendering), stabilno na ZeroGPU.
+# Gradio 5 pokrece Node.js koji crash-uje na HF Spaces-u.
+
 # Dodajemo backend folder u PATH da mozemo da importujemo rag modul.
 # Na HF Space-u, app.py i backend/ folder su u istom korenom direktorijumu.
 _BACKEND_DIR = os.path.join(os.path.dirname(__file__), "backend")
