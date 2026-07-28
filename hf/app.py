@@ -21,6 +21,24 @@ import traceback
 # Gradio 4.x — nema SSR (Server-Side Rendering), stabilno na ZeroGPU.
 # Gradio 5 pokrece Node.js koji crash-uje na HF Spaces-u.
 
+# ════════════════════════════════════════════════════════════════
+# Kompatibilnost: Gradio 4.44.1 importuje HfFolder iz
+# huggingface_hub, ali je uklonjen u huggingface-hub >=0.26.
+# HF Space instalira huggingface-hub>=0.30 (potreban datasetima),
+# pa dodajemo fallback da Gradio ne pukne.
+# ════════════════════════════════════════════════════════════════
+import huggingface_hub as _hf
+if not hasattr(_hf, "HfFolder"):
+    class _HfFolder:
+        """Fallback za HfFolder koji je uklonjen iz huggingface_hub >=0.26."""
+        @staticmethod
+        def get_token():
+            return os.environ.get("HF_TOKEN") or None
+        @staticmethod
+        def save_token(token):
+            pass  # nema potrebe za cuvanjem na disku u Space-u
+    _hf.HfFolder = _HfFolder
+
 # Dodajemo backend folder u PATH da mozemo da importujemo rag modul.
 # Na HF Space-u, app.py i backend/ folder su u istom korenom direktorijumu.
 _BACKEND_DIR = os.path.join(os.path.dirname(__file__), "backend")

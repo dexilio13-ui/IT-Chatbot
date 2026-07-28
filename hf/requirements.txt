@@ -2,14 +2,13 @@
 # Ove biblioteke su potrebne za rad RAG engine-a na HF Spaces
 #
 # NAPOMENA: HF ZeroGPU automatski instalira:
-#   - gradio[oauth]==5.25.0 (ali na ovom Space-u koristi 4.44.1)
+#   - gradio[oauth]==4.44.1
 #   - spaces==0.51.1
 #   - uvicorn, websockets
 # Zato ih ne navodimo ovde da ne bi doslo do konflikta.
 
-# Gradio 4.44.1 importuje HfFolder iz huggingface_hub, ali je uklonjen u >=0.26
-# HF instalira huggingface-hub>=0.30 pre requirements.txt, pa ga prepisujemo ovde
-huggingface-hub>=0.20,<0.26
+# NAPOMENA: huggingface-hub se ne pin-uje jer HF instalira >=0.30
+# (potreban datasetima). Umesto toga, HfFolder fallback je u app.py.
 
 llama-index-core>=0.14.23
 llama-index-embeddings-openai>=0.6.0
