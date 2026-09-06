@@ -32,9 +32,16 @@ class Settings(BaseSettings):
     QDRANT_URL: str = "http://localhost:6333"
     QDRANT_API_KEY: str | None = None
     QDRANT_COLLECTION: str = "it_support_kb"
-    QDRANT_EMBEDDING_DIM: int = 1536  # text-embedding-3-small dimenzija
 
-    # ── OpenAI ─────────────────────────────────────────────
+    # ── Groq (besplatni LLM) ──────────────────────────
+    GROQ_API_KEY: str = ""
+    GROQ_MODEL: str = "llama-3.3-70b-versatile"
+
+    # ── HuggingFace (besplatni embedding) ───────────────
+    HF_EMBEDDING_MODEL: str = "BAAI/bge-small-en-v1.5"
+    QDRANT_EMBEDDING_DIM: int = 384  # bge-small-en-v1.5 = 384 dim
+
+    # ── OpenAI (fallback ako je potrebno) ────────────────
     OPENAI_API_KEY: str = ""
 
     # ── LlamaCloud (LlamaParse) ───────────────────────────

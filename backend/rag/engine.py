@@ -22,8 +22,8 @@ from llama_index.core.vector_stores.types import (
 )
 from llama_index.retrievers.bm25 import BM25Retriever
 from llama_index.vector_stores.qdrant import QdrantVectorStore
-from llama_index.embeddings.openai import OpenAIEmbedding
-from llama_index.llms.openai import OpenAI
+from llama_index.llms.groq import Groq
+from llama_index.embeddings.huggingface import HuggingFaceEmbedding
 from qdrant_client import QdrantClient
 from sqlmodel import Session
 
@@ -35,20 +35,20 @@ logger = logging.getLogger(__name__)
 # ==========================================
 # 0. Globalna konfiguracija LlamaIndex
 # ==========================================
-# OpenAI embedding model (text-embedding-3-small, dim=1536)
-Settings.embed_model = OpenAIEmbedding(
-    model="text-embedding-3-small",
-    api_key=settings.OPENAI_API_KEY or None,
+# HuggingFace embedding model (besplatan, radi lokalno)
+# BAAI/bge-small-en-v1.5 → 384 dimenzije
+Settings.embed_model = HuggingFaceEmbedding(
+    model_name=settings.HF_EMBEDDING_MODEL,
 )
-# OpenAI LLM (gpt-4o-mini)
-Settings.llm = OpenAI(
-    model="gpt-4o-mini",
-    temperature=0.1,  # Niska temperatura za precizne, faktografske odgovore
-    max_tokens=300,  # Ograničenje dužine odgovora (1-2 pasusa)
-    api_key=settings.OPENAI_API_KEY or None,
+# Groq LLM (besplatan, brz)
+Settings.llm = Groq(
+    model=settings.GROQ_MODEL,
+    temperature=0.1,
+    max_tokens=300,
+    api_key=settings.GROQ_API_KEY or None,
 )
-# Ograničavam broj tokena po odgovoru (duplirano radi sigurnosti)
-Settings.num_output = 300
+# Settings.num_output koristi LlamaIndex default (512)
+# max_tokens=150 se postavlja samo na chitchat LLM instanci
 
 # ==========================================
 # 1. Lazy inicijalizacija Qdrant veze i indeksa
@@ -113,8 +113,17 @@ def _ensure_initialized() -> None:
     # BM25 docstore
     _bm25_docstore = _build_bm25_docstore()
 
-    _QDRANT_INITIALIZED = True
-    logger.info("Qdrant inicijalizacija zavrsena.")
+    if _bm25_docstore is None:
+        logger.warning(
+            "Qdrant kolekcija '%s' je prazna ili nedostupna. "
+            "Koristicu LLM-only rezim.",
+            settings.QDRANT_COLLECTION,
+        )
+        _QDRANT_INITIALIZED = True  # Kesiraj da smo proverili
+        _index = None               # Forsiraj LLM-only
+    else:
+        _QDRANT_INITIALIZED = True
+        logger.info("Qdrant inicijalizacija zavrsena.")
 
 
 # ==========================================
@@ -368,52 +377,23 @@ def get_chat_engine(
             system_prompt += "\n\n" + catalog
         logger.info("Konfigurator mod: ucitano %d karaktera kataloga.", len(catalog))
 
-    # Lazy inicijalizacija Qdrant veze (omogucava auto-start iz lifespan-a)
-    _ensure_initialized()
-
-    # Admin vidi sve dokumente - preskačemo RBAC filter
-    if not is_admin:
-        filters = MetadataFilters(
-            filters=[
-                MetadataFilter(
-                    key="required_role_id",
-                    value=role_id,
-                    operator=FilterOperator.LTE,
-                )
-            ]
+    # ── LLM setup (radi i bez Qdrant-a) ──────────────────────
+    if chitchat_enabled:
+        llm = Groq(
+            model=settings.GROQ_MODEL,
+            temperature=settings.CHITCHAT_TEMPERATURE,
+            max_tokens=150,
+            api_key=settings.GROQ_API_KEY or None,
+        )
+        logger.debug(
+            "Chitchat mod: temperatura LLM = %.1f", settings.CHITCHAT_TEMPERATURE
         )
     else:
-        filters = None
-
-    # Vektorski retriever (sa RBAC filterom ugrađenim, osim za admina)
-    assert _index is not None
-    vector_retriever = _index.as_retriever(filters=filters, similarity_top_k=3)
-
-    # BM25 retriever (ako je docstore dostupan)
-    if _bm25_docstore is not None:
-        bm25_retriever = BM25Retriever.from_defaults(
-            docstore=_bm25_docstore,
-            similarity_top_k=3,
-        )
-    else:
-        bm25_retriever = None
-
-    if bm25_retriever is not None:
-        # Hybrid retriever koji kombinuje oba
-        hybrid_retriever: BaseRetriever = HybridRetriever(
-            vector_retriever=vector_retriever,
-            bm25_retriever=bm25_retriever,
-            role_id=role_id,
-            similarity_top_k=3,
-            is_admin=is_admin,
-        )
-    else:
-        # Samo vektorski retriever (BM25 nije dostupan)
-        hybrid_retriever = vector_retriever
+        llm = Settings.llm
+        logger.debug("Strogi RAG mod: temperatura LLM = 0.1")
 
     # ── Učitavanje istorije ────────────────────────────────────
     if session is not None:
-        # DB-backed: učitavamo istoriju iz PostgreSQL
         history_entries = load_chat_history(session, username)
         chat_messages: list[ChatMessage] = [
             ChatMessage(
@@ -434,32 +414,70 @@ def get_chat_engine(
             username,
         )
     else:
-        # In-memory fallback (za testove i kompatibilnost)
         if username not in _chat_memories:
             _chat_memories[username] = ChatMemoryBuffer.from_defaults(token_limit=1500)
         memory = _chat_memories[username]
 
-    # ── Odaberi LLM sa odgovarajucom temperaturom ────────────
-    # Kada je caskanje ukljuceno, koristimo visu temperaturu
-    # (podesivu preko CHITCHAT_TEMPERATURE u .env fajlu) da
-    # odgovori budu prirodniji. Za strogi RAG rezim ostaje 0.1.
-    if chitchat_enabled:
-        llm = OpenAI(
-            model="gpt-4o-mini",
-            temperature=settings.CHITCHAT_TEMPERATURE,
-            max_tokens=2048,  # Veci limit za konfiguracije (cene, specifikacije)
-            api_key=settings.OPENAI_API_KEY or None,
+    # ── Pokušaj inicijalizacije Qdrant-a ──────────────────────
+    # Stara Qdrant kolekcija ima 1536-dim vektore (OpenAI),
+    # novi HuggingFace model proizvodi 384-dim. Ako dodje do
+    # dimenzijske neusaglašenosti, padamo na LLM-only rezim.
+    try:
+        _ensure_initialized()
+    except Exception as e:
+        logger.warning(
+            "Qdrant inicijalizacija nije uspela: %s. Radim u LLM-only rezimu.", e
         )
-        logger.debug(
-            "Chitchat mod: temperatura LLM = %.1f", settings.CHITCHAT_TEMPERATURE
+
+    # ── Kreiranje chat engine-a ────────────────────────────────
+    if _index is not None and _QDRANT_INITIALIZED:
+        # Qdrant je dostupan — koristimo hibridni retriver
+        if not is_admin:
+            filters = MetadataFilters(
+                filters=[
+                    MetadataFilter(
+                        key="required_role_id",
+                        value=role_id,
+                        operator=FilterOperator.LTE,
+                    )
+                ]
+            )
+        else:
+            filters = None
+
+        vector_retriever = _index.as_retriever(filters=filters, similarity_top_k=3)
+
+        if _bm25_docstore is not None:
+            bm25_retriever = BM25Retriever.from_defaults(
+                docstore=_bm25_docstore,
+                similarity_top_k=3,
+            )
+            hybrid_retriever: BaseRetriever = HybridRetriever(
+                vector_retriever=vector_retriever,
+                bm25_retriever=bm25_retriever,
+                role_id=role_id,
+                similarity_top_k=3,
+                is_admin=is_admin,
+            )
+        else:
+            hybrid_retriever = vector_retriever
+
+        return CondensePlusContextChatEngine.from_defaults(
+            retriever=hybrid_retriever,
+            memory=memory,
+            system_prompt=system_prompt,
+            llm=llm,
         )
     else:
-        llm = Settings.llm
-        logger.debug("Strogi RAG mod: temperatura LLM = 0.1")
+        # Qdrant nije dostupan — LLM-only rezim (chitchat radi, RAG ne)
+        from llama_index.core.chat_engine import SimpleChatEngine
 
-    return CondensePlusContextChatEngine.from_defaults(
-        retriever=hybrid_retriever,
-        memory=memory,
-        system_prompt=system_prompt,
-        llm=llm,
-    )
+        logger.info(
+            "Qdrant nije dostupan. Koristim SimpleChatEngine (LLM-only) za '%s'.",
+            username,
+        )
+        return SimpleChatEngine.from_defaults(
+            llm=llm,
+            memory=memory,
+            system_prompt=system_prompt,
+        )

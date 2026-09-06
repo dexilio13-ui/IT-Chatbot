@@ -47,10 +47,10 @@ if _BACKEND_DIR not in sys.path:
 
 import gradio as gr
 
-# spaces je potreban za ZeroGPU kompatibilnost na HF.
-# Iako nas app ne koristi GPU (samo OpenAI API), HF zahteva
-# ovaj import da bi Space mogao da se pokrene na ZeroGPU hardveru.
-import spaces  # noqa: F401
+# NAPOMENA: NE importujemo spaces jer HF ZeroGPU runtime sam
+# inject-uje spaces wrapper. Rucni import spaces==0.51.1 pravi
+# TypeError: unhashable type 'dict' u Jinja2 template renderingu
+# na Gradio 4.44.1.
 
 from rag.engine import get_chat_engine
 from rag.classifier import is_chitchat_query
@@ -71,8 +71,8 @@ _NO_DATA_PHRASE = "Nemam taj podatak u bazi znanja"
 
 # Proveravamo na startu da li su bitne env varijable postavljene
 _MISSING_ENV = []
-if not os.environ.get("OPENAI_API_KEY"):
-    _MISSING_ENV.append("OPENAI_API_KEY")
+if not os.environ.get("GROQ_API_KEY"):
+    _MISSING_ENV.append("GROQ_API_KEY")
 if not os.environ.get("QDRANT_URL"):
     _MISSING_ENV.append("QDRANT_URL")
 
@@ -138,6 +138,7 @@ def respond_stream(message: str, history: list):
     """
     # Ako nedostaju env varijable, odmah vrati poruku
     if _MISSING_ENV:
+    if _MISSING_ENV:
         yield (
             "❌ **Baza znanja nije povezana.**\n\n"
             "Da bi chatbot radio potrebno je podesiti:\n"
@@ -155,8 +156,8 @@ def respond_stream(message: str, history: list):
             "❌ **Doslo je do greske prilikom obrade zahteva.**\n\n"
             "Proveri da li su sledece usluge dostupne:\n"
             "- Qdrant baza podataka (QDRANT_URL)\n"
-            "- OpenAI API kljuc (OPENAI_API_KEY)\n"
-            "- OpenAI API nalog ima sredstava\n\n"
+            "- Groq API kljuc (GROQ_API_KEY)\n"
+            "- Qdrant kolekcija sa 384-dim vektorima\n\n"
             f"{type(e).__name__}: {e}"
         )
         return
@@ -241,11 +242,11 @@ with gr.Blocks(
     gr.Markdown(
         """
     ---
-    Powered by **GPT-4o-mini** + **Qdrant** + **LlamaIndex**
+    Powered by **Llama 3 (Groq)** + **HuggingFace** + **Qdrant** + **LlamaIndex**
     """
     )
 
 # ── Pokretanje ───────────────────────────────────────────────────
 
 if __name__ == "__main__":
-    demo.launch(server_name="0.0.0.0", server_port=7860)
+    demo.launch(server_name="0.0.0.0", server_port=7860, share=True)

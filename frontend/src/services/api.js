@@ -154,14 +154,11 @@ async function _streamChat(endpoint, body, token, onToken, onSources, onDone) {
 
   let response
   try {
-    response = await fetch(`${API_BASE_URL}/api/chat/stream`, {
+    response = await fetch(`${API_BASE_URL}${endpoint}`, {
       signal: controller.signal,
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`,
-      },
-      body: JSON.stringify({ message }),
+      headers,
+      body: JSON.stringify(body),
     })
 
   if (!response.ok) {

@@ -46,7 +46,7 @@ export default function LoginForm() {
               type="text"
               value={username}
               onChange={(e) => setUsername(e.target.value)}
-              placeholder="serviser"
+              placeholder="unesi korisnicko ime"
               autoFocus
               disabled={loading}
               className="
@@ -84,15 +84,6 @@ export default function LoginForm() {
               {error}
             </div>
           )}
-
-          {/* Test credentials hint */}
-          <div className="bg-gray-800/50 border border-gray-700/50 rounded-xl px-4 py-3 text-xs text-gray-500 space-y-0.5">
-            <p className="font-medium text-gray-400 mb-1">Test nalozi:</p>
-            <p>admin / admin123</p>
-            <p>serviser / 123</p>
-            <p>prodavac / 123</p>
-            <p>kupac / 123</p>
-          </div>
 
           <button
             type="submit"
